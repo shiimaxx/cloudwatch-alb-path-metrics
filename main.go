@@ -23,69 +23,23 @@ var s3Client *s3.Client
 var cwClient *cloudwatch.Client
 
 func publishMetrics(ctx context.Context, path string, metrics map[time.Time][]string) error {
+	var metricData []types.MetricDatum
 	for t, entries := range metrics {
+
+		var requestCount float64
+		var successRequestCount float64
+		var latencies []float64
+		var latencyCounts []float64
+
 		fmt.Println(t, entries)
 	}
 
 	_, err := cwClient.PutMetricData(ctx, &cloudwatch.PutMetricDataInput{
-		Namespace: aws.String("Shiimaxx"),
-		MetricData: []types.MetricDatum{
-			{
-				MetricName: aws.String("RequestCount"),
-				Dimensions: []types.Dimension{
-					{
-						Name:  aws.String("Path"),
-						Value: aws.String(path),
-					},
-				},
-				Value: aws.Float64(1.0),
-				Unit:  types.StandardUnitCount,
-			},
-		},
+		Namespace:  aws.String("Shiimaxx"),
+		MetricData: metricData,
 	})
 	if err != nil {
-		fmt.Println("failed to put RequestCount:", err)
-	}
-
-	_, err = cwClient.PutMetricData(ctx, &cloudwatch.PutMetricDataInput{
-		Namespace: aws.String("Shiimaxx"),
-		MetricData: []types.MetricDatum{
-			{
-				MetricName: aws.String("SuccessRequestCount"),
-				Dimensions: []types.Dimension{
-					{
-						Name:  aws.String("Path"),
-						Value: aws.String(path),
-					},
-				},
-				Value: aws.Float64(1.0),
-				Unit:  types.StandardUnitCount,
-			},
-		},
-	})
-	if err != nil {
-		fmt.Println("failed to put SuccessRequestCount:", err)
-	}
-
-	_, err = cwClient.PutMetricData(ctx, &cloudwatch.PutMetricDataInput{
-		Namespace: aws.String("Shiimaxx"),
-		MetricData: []types.MetricDatum{
-			{
-				MetricName: aws.String("RequestTime"),
-				Dimensions: []types.Dimension{
-					{
-						Name:  aws.String("Path"),
-						Value: aws.String(path),
-					},
-				},
-				Values: []float64{123.0},
-				Counts: []float64{1},
-				Unit:   types.StandardUnitMilliseconds,
-			},
-		},
-	})
-	if err != nil {
-		fmt.Println("failed to put RequestTime:", err)
+		return fmt.Errorf("failed to put metric data: %w", err)
 	}
 
 	return nil
