@@ -27,7 +27,7 @@ func processLogEntry(entries []string) {
 		responseProcessingTime := sp[7]
 		elbStatusCode := sp[8]
 		targetStatusCode := sp[9]
-		request := sp[12]
+		request := sp[13]
 
 		fmt.Printf("Time: %s,ELB Status: %s, Target Status: %s, Request Time: %s, Target Time: %s, Response Time: %s, Request: %s\n",
 			t, elbStatusCode, targetStatusCode, requestProcessingTime, targetProcessingTime, responseProcessingTime, request)
