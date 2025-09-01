@@ -7,8 +7,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"net/http"
-	"net/http/httptest"
 	"net/url"
 	"os"
 	"strconv"
@@ -22,50 +20,17 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/cloudwatch"
 	"github.com/aws/aws-sdk-go-v2/service/cloudwatch/types"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
-
-	"github.com/julienschmidt/httprouter"
+	"github.com/shiimaxx/cloudwatch-alb-path-metrics/internal/matcher"
 )
 
 var s3Client *s3.Client
 var cwClient *cloudwatch.Client
 
-var router *httprouter.Router
-
-type pathPattern struct {
-	Method  string `json:"method"`
-	Pattern string `json:"pattern"`
-	Name    string `json:"name"`
-}
-
-func loadPathPatterns() error {
-	// [{"method:"GET","pattern":"/api/v1/users/:id","name":"GetUser"},{"method":"POST","pattern":"/api/v1/users","name":"CreateUser"}]
-	pathPatterns := os.Getenv("PATH_PATTERNS")
-	if pathPatterns == "" {
-		return nil
-	}
-
-	var pp []*pathPattern
-	if err := json.Unmarshal([]byte(pathPatterns), &pp); err != nil {
-		return fmt.Errorf("failed to unmarshal path patterns: %w", err)
-	}
-
-	router = httprouter.New()
-
-	for _, p := range pp {
-		p := p
-		dummyHandler := func(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
-			w.Write([]byte(p.Name))
-		}
-		router.Handle(p.Method, p.Pattern, dummyHandler)
-	}
-	return nil
-}
+var m *matcher.Matcher
 
 func normalizePath(method, path string) (string, bool) {
-	if handler, _, _ := router.Lookup(method, path); handler != nil {
-		rr := httptest.NewRecorder()
-		handler(rr, nil, nil)
-		return rr.Body.String(), true
+	if name, found := m.Match(method, path); found {
+		return name, true
 	}
 	return "", false
 }
@@ -259,7 +224,14 @@ func handler(ctx context.Context, s3Event events.S3Event) (string, error) {
 	s3Client = s3.NewFromConfig(cfg)
 	cwClient = cloudwatch.NewFromConfig(cfg)
 
-	loadPathPatterns()
+	// [{"method:"GET","pattern":"/api/v1/users/:id","name":"GetUser"},{"method":"POST","pattern":"/api/v1/users","name":"CreateUser"}]
+	var routes []matcher.Route
+	if pathPatterns := os.Getenv("PATH_PATTERNS"); pathPatterns != "" {
+		if err := json.Unmarshal([]byte(pathPatterns), &routes); err != nil {
+			return "", fmt.Errorf("failed to unmarshal path patterns: %w", err)
+		}
+		m = matcher.New(routes)
+	}
 
 	for _, record := range s3Event.Records {
 		if err := processS3Object(ctx, s3Client, record.S3.Bucket.Name, record.S3.Object.Key); err != nil {
