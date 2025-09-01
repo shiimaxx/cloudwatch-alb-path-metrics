@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/http/httptest"
 	"net/url"
 	"os"
 	"strconv"
@@ -28,14 +29,13 @@ import (
 var s3Client *s3.Client
 var cwClient *cloudwatch.Client
 
+var router *httprouter.Router
+
 type pathPattern struct {
 	Method  string `json:"method"`
 	Pattern string `json:"pattern"`
 	Name    string `json:"name"`
-	router  *httprouter.Router
 }
-
-var pp []*pathPattern
 
 func loadPathPatterns() error {
 	// [{"method:"GET","pattern":"/api/v1/users/:id","name":"GetUser"},{"method":"POST","pattern":"/api/v1/users","name":"CreateUser"}]
@@ -44,27 +44,25 @@ func loadPathPatterns() error {
 		return nil
 	}
 
-	if err := json.Unmarshal([]byte(pathPatterns), &pathPatterns); err != nil {
+	var pp []*pathPattern
+	if err := json.Unmarshal([]byte(pathPatterns), &pp); err != nil {
 		return fmt.Errorf("failed to unmarshal path patterns: %w", err)
 	}
 
-	dummyHandler := func(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {}
 	for _, p := range pp {
-		router := httprouter.New()
+		dummyHandler := func(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
+			w.Write([]byte(p.Name))
+		}
 		router.Handle(p.Method, p.Pattern, dummyHandler)
-		p.router = router
 	}
 	return nil
 }
 
 func normalizePath(method, path string) (string, bool) {
-	for _, p := range pp {
-		if p.Method != method {
-			continue
-		}
-		if handler, _, _ := p.router.Lookup(method, path); handler != nil {
-			return p.Name, true
-		}
+	if handler, _, _ := router.Lookup(method, path); handler != nil {
+		rr := httptest.NewRecorder()
+		handler(rr, nil, nil)
+		return rr.Body.String(), true
 	}
 	return "", false
 }
