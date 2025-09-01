@@ -6,7 +6,9 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"net/http"
 	"net/url"
+	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -18,10 +20,66 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/cloudwatch"
 	"github.com/aws/aws-sdk-go-v2/service/cloudwatch/types"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
+
+	"github.com/julienschmidt/httprouter"
 )
 
 var s3Client *s3.Client
 var cwClient *cloudwatch.Client
+
+type PathPattern struct {
+	Pattern    string
+	MetricName string
+	Router     *httprouter.Router
+}
+
+var pathPatterns []PathPattern
+
+func loadPathPatterns() {
+	pathPatternsEnv := os.Getenv("PATH_PATTERNS")
+	if pathPatternsEnv == "" {
+		return
+	}
+
+	pairs := strings.Split(pathPatternsEnv, ",")
+	pathPatterns = make([]PathPattern, 0, len(pairs))
+
+	for _, pair := range pairs {
+		parts := strings.Split(strings.TrimSpace(pair), ":")
+		if len(parts) != 2 {
+			fmt.Printf("Invalid PATH_PATTERNS format: %s\n", pair)
+			continue
+		}
+
+		pattern := strings.TrimSpace(parts[0])
+		name := strings.TrimSpace(parts[1])
+
+		// 各パターン専用のルーターを作成
+		router := httprouter.New()
+		router.Handle("GET", pattern, func(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {})
+
+		pathPatterns = append(pathPatterns, PathPattern{
+			Pattern:    pattern,
+			MetricName: name,
+			Router:     router,
+		})
+	}
+}
+
+func normalizePath(path string) (string, bool) {
+	if len(pathPatterns) == 0 {
+		return path, true
+	}
+
+	for _, pp := range pathPatterns {
+		handle, _, _ := pp.Router.Lookup("GET", path)
+		if handle != nil {
+			return pp.MetricName, true
+		}
+	}
+
+	return "", false
+}
 
 func publishMetrics(ctx context.Context, t time.Time, path string, entries []string) error {
 	var requestCount float64
@@ -102,7 +160,7 @@ func publishMetrics(ctx context.Context, t time.Time, path string, entries []str
 	}
 	metricData = append(metricData, types.MetricDatum{
 		MetricName: aws.String("Latency"),
-		Timestamp:  aws.Time(t),		
+		Timestamp:  aws.Time(t),
 		Dimensions: []types.Dimension{
 			{
 				Name:  aws.String("Path"),
@@ -149,11 +207,16 @@ func processLogEntry(ctx context.Context, entries []string) error {
 			continue
 		}
 
-		if _, ok := metrics[u.Path]; !ok {
-			metrics[u.Path] = make(map[string][]string)
+		normalizedPath, allowed := normalizePath(u.Path)
+		if !allowed {
+			continue
 		}
 
-		metrics[u.Path][tAsKey] = append(metrics[u.Path][tAsKey], entry)
+		if _, ok := metrics[normalizedPath]; !ok {
+			metrics[normalizedPath] = make(map[string][]string)
+		}
+
+		metrics[normalizedPath][tAsKey] = append(metrics[normalizedPath][tAsKey], entry)
 	}
 
 	for path, timeMap := range metrics {
@@ -205,6 +268,8 @@ func handler(ctx context.Context, s3Event events.S3Event) (string, error) {
 	}
 	s3Client = s3.NewFromConfig(cfg)
 	cwClient = cloudwatch.NewFromConfig(cfg)
+
+	loadPathPatterns()
 
 	for _, record := range s3Event.Records {
 		if err := processS3Object(ctx, s3Client, record.S3.Bucket.Name, record.S3.Object.Key); err != nil {

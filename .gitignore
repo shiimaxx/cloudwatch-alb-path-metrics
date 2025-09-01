@@ -1,3 +1,4 @@
+cloudwatch-alb-path-metrics
 dist/*
 testdata/*.log.gz
 testdata/*.log
