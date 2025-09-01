@@ -20,6 +20,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/cloudwatch"
 	"github.com/aws/aws-sdk-go-v2/service/cloudwatch/types"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
+
 	"github.com/shiimaxx/cloudwatch-alb-path-metrics/internal/matcher"
 )
 
