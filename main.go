@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"compress/gzip"
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
@@ -27,57 +28,44 @@ import (
 var s3Client *s3.Client
 var cwClient *cloudwatch.Client
 
-type PathPattern struct {
-	Pattern    string
-	MetricName string
-	Router     *httprouter.Router
+type pathPattern struct {
+	Method  string `json:"method"`
+	Pattern string `json:"pattern"`
+	Name    string `json:"name"`
+	router  *httprouter.Router
 }
 
-var pathPatterns []PathPattern
+var pp []pathPattern
 
-func loadPathPatterns() {
-	pathPatternsEnv := os.Getenv("PATH_PATTERNS")
-	if pathPatternsEnv == "" {
-		return
+func loadPathPatterns() error {
+	// [{"method:"GET","pattern":"/api/v1/users/:id","name":"GetUser"},{"method":"POST","pattern":"/api/v1/users","name":"CreateUser"}]
+	pathPatterns := os.Getenv("PATH_PATTERNS")
+	if pathPatterns == "" {
+		return nil
 	}
 
-	pairs := strings.Split(pathPatternsEnv, ",")
-	pathPatterns = make([]PathPattern, 0, len(pairs))
+	if err := json.Unmarshal([]byte(pathPatterns), &pathPatterns); err != nil {
+		return fmt.Errorf("failed to unmarshal path patterns: %w", err)
+	}
 
-	for _, pair := range pairs {
-		parts := strings.Split(strings.TrimSpace(pair), ":")
-		if len(parts) != 2 {
-			fmt.Printf("Invalid PATH_PATTERNS format: %s\n", pair)
+	dummyHandler := func(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {}
+	for _, p := range pp {
+		router := httprouter.New()
+		router.Handle(p.Method, p.Pattern, dummyHandler)
+		p.router = router
+	}
+	return nil
+}
+
+func normalizePath(method, path string) (string, bool) {
+	for _, p := range pp {
+		if p.Method != method {
 			continue
 		}
-
-		pattern := strings.TrimSpace(parts[0])
-		name := strings.TrimSpace(parts[1])
-
-		// 各パターン専用のルーターを作成
-		router := httprouter.New()
-		router.Handle("GET", pattern, func(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {})
-
-		pathPatterns = append(pathPatterns, PathPattern{
-			Pattern:    pattern,
-			MetricName: name,
-			Router:     router,
-		})
-	}
-}
-
-func normalizePath(path string) (string, bool) {
-	if len(pathPatterns) == 0 {
-		return path, true
-	}
-
-	for _, pp := range pathPatterns {
-		handle, _, _ := pp.Router.Lookup("GET", path)
-		if handle != nil {
-			return pp.MetricName, true
+		if handler, _, _ := p.router.Lookup(method, path); handler != nil {
+			return p.Name, true
 		}
 	}
-
 	return "", false
 }
 
@@ -200,6 +188,7 @@ func processLogEntry(ctx context.Context, entries []string) error {
 		t = t.Truncate(time.Minute)
 		tAsKey := t.Format(time.RFC3339Nano)
 
+		method := strings.TrimLeft(sp[12], "\"")
 		request := sp[13]
 		u, err := url.Parse(request)
 		if err != nil {
@@ -207,7 +196,7 @@ func processLogEntry(ctx context.Context, entries []string) error {
 			continue
 		}
 
-		normalizedPath, allowed := normalizePath(u.Path)
+		normalizedPath, allowed := normalizePath(method, u.Path)
 		if !allowed {
 			continue
 		}
