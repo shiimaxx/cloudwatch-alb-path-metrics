@@ -35,7 +35,7 @@ type pathPattern struct {
 	router  *httprouter.Router
 }
 
-var pp []pathPattern
+var pp []*pathPattern
 
 func loadPathPatterns() error {
 	// [{"method:"GET","pattern":"/api/v1/users/:id","name":"GetUser"},{"method":"POST","pattern":"/api/v1/users","name":"CreateUser"}]
