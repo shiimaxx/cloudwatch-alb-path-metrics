@@ -49,7 +49,10 @@ func loadPathPatterns() error {
 		return fmt.Errorf("failed to unmarshal path patterns: %w", err)
 	}
 
+	router = httprouter.New()
+
 	for _, p := range pp {
+		p := p
 		dummyHandler := func(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
 			w.Write([]byte(p.Name))
 		}
@@ -126,7 +129,7 @@ func publishMetrics(ctx context.Context, t time.Time, path string, entries []str
 	})
 
 	metricData = append(metricData, types.MetricDatum{
-		MetricName: aws.String("SuccessfullRequestCount"),
+		MetricName: aws.String("SuccessfulRequestCount"),
 		Timestamp:  aws.Time(t),
 		Dimensions: []types.Dimension{
 			{
