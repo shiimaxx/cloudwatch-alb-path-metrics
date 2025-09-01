@@ -70,6 +70,7 @@ func publishMetrics(ctx context.Context, t time.Time, path string, entries []str
 
 	metricData = append(metricData, types.MetricDatum{
 		MetricName: aws.String("RequestCount"),
+		Timestamp:  aws.Time(t),
 		Dimensions: []types.Dimension{
 			{
 				Name:  aws.String("Path"),
@@ -82,6 +83,7 @@ func publishMetrics(ctx context.Context, t time.Time, path string, entries []str
 
 	metricData = append(metricData, types.MetricDatum{
 		MetricName: aws.String("SuccessfullRequestCount"),
+		Timestamp:  aws.Time(t),
 		Dimensions: []types.Dimension{
 			{
 				Name:  aws.String("Path"),
@@ -100,6 +102,7 @@ func publishMetrics(ctx context.Context, t time.Time, path string, entries []str
 	}
 	metricData = append(metricData, types.MetricDatum{
 		MetricName: aws.String("Latency"),
+		Timestamp:  aws.Time(t),		
 		Dimensions: []types.Dimension{
 			{
 				Name:  aws.String("Path"),
@@ -129,6 +132,7 @@ func processLogEntry(ctx context.Context, entries []string) error {
 		if entry == "" {
 			continue
 		}
+
 		sp := strings.Split(entry, " ")
 		t, err := time.Parse(time.RFC3339Nano, sp[1])
 		if err != nil {
