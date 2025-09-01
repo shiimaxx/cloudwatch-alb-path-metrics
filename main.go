@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/url"
+	"strconv"
 	"strings"
 	"time"
 
@@ -22,17 +23,93 @@ import (
 var s3Client *s3.Client
 var cwClient *cloudwatch.Client
 
-func publishMetrics(ctx context.Context, path string, metrics map[time.Time][]string) error {
+func publishMetrics(ctx context.Context, t time.Time, path string, entries []string) error {
+	var requestCount float64
+	var successfulRequestCount float64
+	latencies := make(map[float64]float64)
 	var metricData []types.MetricDatum
-	for t, entries := range metrics {
 
-		var requestCount float64
-		var successRequestCount float64
-		var latencies []float64
-		var latencyCounts []float64
+	for _, entry := range entries {
+		sp := strings.Split(entry, " ")
+		requestProcessingTime, err := strconv.ParseFloat(sp[5], 64)
+		if err != nil {
+			fmt.Println("failed to parse request processing time:", err)
+			continue
+		}
+		targetProcessingTime, err := strconv.ParseFloat(sp[6], 64)
+		if err != nil {
+			fmt.Println("failed to parse target processing time:", err)
+			continue
+		}
+		responseProcessingTime, err := strconv.ParseFloat(sp[7], 64)
+		if err != nil {
+			fmt.Println("failed to parse response processing time:", err)
+			continue
+		}
+		elbStatusCode, err := strconv.Atoi(sp[8])
+		if err != nil {
+			fmt.Println("failed to parse elb status code:", err)
+			continue
+		}
+		// targetStatusCode, err := strconv.Atoi(sp[9])
+		// if err != nil {
+		// 	fmt.Println("failed to parse target status code:", err)
+		// 	continue
+		// }
 
-		fmt.Println(t, entries)
+		requestCount++
+		if elbStatusCode >= 200 && elbStatusCode <= 499 {
+			successfulRequestCount++
+		}
+		latency := requestProcessingTime + targetProcessingTime + responseProcessingTime
+		if _, ok := latencies[latency]; !ok {
+			latencies[latency] = 0
+		}
+		latencies[latency]++
 	}
+
+	metricData = append(metricData, types.MetricDatum{
+		MetricName: aws.String("RequestCount"),
+		Dimensions: []types.Dimension{
+			{
+				Name:  aws.String("Path"),
+				Value: aws.String(path),
+			},
+		},
+		Value: aws.Float64(requestCount),
+		Unit:  types.StandardUnitCount,
+	})
+
+	metricData = append(metricData, types.MetricDatum{
+		MetricName: aws.String("SuccessfullRequestCount"),
+		Dimensions: []types.Dimension{
+			{
+				Name:  aws.String("Path"),
+				Value: aws.String(path),
+			},
+		},
+		Value: aws.Float64(successfulRequestCount),
+		Unit:  types.StandardUnitCount,
+	})
+
+	latencyValues := make([]float64, 0, len(latencies))
+	latencyCounts := make([]float64, 0, len(latencies))
+	for latency, count := range latencies {
+		latencyValues = append(latencyValues, latency)
+		latencyCounts = append(latencyCounts, count)
+	}
+	metricData = append(metricData, types.MetricDatum{
+		MetricName: aws.String("Latency"),
+		Dimensions: []types.Dimension{
+			{
+				Name:  aws.String("Path"),
+				Value: aws.String(path),
+			},
+		},
+		Values: latencyValues,
+		Counts: latencyCounts,
+		Unit:   types.StandardUnitSeconds,
+	})
 
 	_, err := cwClient.PutMetricData(ctx, &cloudwatch.PutMetricDataInput{
 		Namespace:  aws.String("Shiimaxx"),
@@ -46,11 +123,21 @@ func publishMetrics(ctx context.Context, path string, metrics map[time.Time][]st
 }
 
 func processLogEntry(ctx context.Context, entries []string) error {
-	metrics := make(map[string]map[time.Time][]string)
+	metrics := make(map[string]map[string][]string)
 
 	for _, entry := range entries {
+		if entry == "" {
+			continue
+		}
 		sp := strings.Split(entry, " ")
-		t := sp[1]
+		t, err := time.Parse(time.RFC3339Nano, sp[1])
+		if err != nil {
+			fmt.Println("failed to parse time:", err)
+			continue
+		}
+		t = t.Truncate(time.Minute)
+		tAsKey := t.Format(time.RFC3339Nano)
+
 		request := sp[13]
 		u, err := url.Parse(request)
 		if err != nil {
@@ -59,21 +146,21 @@ func processLogEntry(ctx context.Context, entries []string) error {
 		}
 
 		if _, ok := metrics[u.Path]; !ok {
-			metrics[u.Path] = make(map[time.Time][]string)
+			metrics[u.Path] = make(map[string][]string)
 		}
 
-		tt, err := time.Parse(time.RFC3339Nano, t)
-		if err != nil {
-			fmt.Println("failed to parse time:", err)
-			continue
-		}
-		_ = tt.Truncate(time.Minute)
-
-		metrics[u.Path][tt] = append(metrics[u.Path][tt], entry)
+		metrics[u.Path][tAsKey] = append(metrics[u.Path][tAsKey], entry)
 	}
 
 	for path, timeMap := range metrics {
-		publishMetrics(ctx, path, timeMap)
+		for t, entries := range timeMap {
+			parsedTime, err := time.Parse(time.RFC3339Nano, t)
+			if err != nil {
+				fmt.Println("failed to parse time:", err)
+				continue
+			}
+			publishMetrics(ctx, parsedTime, path, entries)
+		}
 	}
 
 	return nil
