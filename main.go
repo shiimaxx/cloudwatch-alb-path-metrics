@@ -215,6 +215,7 @@ func processS3Object(ctx context.Context, client *s3.Client, bucket, key string)
 
 	reader := bufio.NewReader(zr)
 	cr := csv.NewReader(reader)
+	cr.Comma = ' '
 	processLogEntry(ctx, cr)
 
 	return nil
