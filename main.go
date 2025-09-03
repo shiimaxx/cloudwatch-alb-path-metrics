@@ -252,6 +252,7 @@ func handler(ctx context.Context, s3Event events.S3Event) (error) {
 
 		regexMatcher = make(map[string]*pathPattern)
 		for _, p := range pp {
+			p := p
 			regex, err := regexp.Compile(p.Pattern)
 			if err != nil {
 				return fmt.Errorf("failed to compile regex pattern %s: %w", p.Pattern, err)
