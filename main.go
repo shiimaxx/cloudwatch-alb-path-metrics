@@ -224,7 +224,7 @@ func processS3Object(ctx context.Context, client *s3.Client, bucket, key string)
 	cr := csv.NewReader(reader)
 	cr.Comma = ' '
 	cr.ReuseRecord = true
-	
+
 	if err := processLogEntry(ctx, cr); err != nil {
 		return fmt.Errorf("failed to process log entry: %w", err)
 	}
@@ -232,7 +232,7 @@ func processS3Object(ctx context.Context, client *s3.Client, bucket, key string)
 	return nil
 }
 
-func handler(ctx context.Context, s3Event events.S3Event) (error) {
+func handler(ctx context.Context, s3Event events.S3Event) error {
 	cfg, err := config.LoadDefaultConfig(ctx)
 	if err != nil {
 		return fmt.Errorf("unable to load SDK config, %v", err)
