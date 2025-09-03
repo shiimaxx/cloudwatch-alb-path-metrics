@@ -27,14 +27,21 @@ import (
 var s3Client *s3.Client
 var cwClient *cloudwatch.Client
 
-var regexMatcher map[string]*regexp.Regexp
+var regexMatcher map[string]*pathPattern
 
 type pathPattern struct {
+	Method  string `json:"method"`
 	Pattern string `json:"pattern"`
 	Name    string `json:"name"`
+	Re      *regexp.Regexp
 }
 
 func normalizePath(method, path string) (string, bool) {
+	for name, p := range regexMatcher {
+		if p.Method == method && p.Re.MatchString(path) {
+			return name, true
+		}
+	}
 	return "", false
 }
 
@@ -217,33 +224,40 @@ func processS3Object(ctx context.Context, client *s3.Client, bucket, key string)
 	cr := csv.NewReader(reader)
 	cr.Comma = ' '
 	cr.ReuseRecord = true
-	processLogEntry(ctx, cr)
+	
+	if err := processLogEntry(ctx, cr); err != nil {
+		return fmt.Errorf("failed to process log entry: %w", err)
+	}
 
 	return nil
 }
 
-func handler(ctx context.Context, s3Event events.S3Event) (string, error) {
+func handler(ctx context.Context, s3Event events.S3Event) (error) {
 	cfg, err := config.LoadDefaultConfig(ctx)
 	if err != nil {
-		return "", fmt.Errorf("unable to load SDK config, %v", err)
+		return fmt.Errorf("unable to load SDK config, %v", err)
 	}
 	s3Client = s3.NewFromConfig(cfg)
 	cwClient = cloudwatch.NewFromConfig(cfg)
 
-	// [{"pattern":"GET /api/v1/users/\d","name":"GetUser"},{"pattern":"/api/v1/users","name":"CreateUser"}]
+	// [
+	//   {"method":"GET", "pattern":"/api/v1/users/\d","name":"GetUser"},
+	//   {"method":"POST", "pattern":"/api/v1/users","name":"CreateUser"}
+	// ]
 	var pp []pathPattern
 	if pathPatterns := os.Getenv("PATH_PATTERNS"); pathPatterns != "" {
 		if err := json.Unmarshal([]byte(pathPatterns), &pp); err != nil {
-			return "", fmt.Errorf("failed to unmarshal path patterns: %w", err)
+			return fmt.Errorf("failed to unmarshal path patterns: %w", err)
 		}
 
-		regexMatcher = make(map[string]*regexp.Regexp)
+		regexMatcher = make(map[string]*pathPattern)
 		for _, p := range pp {
 			regex, err := regexp.Compile(p.Pattern)
 			if err != nil {
-				return "", fmt.Errorf("failed to compile regex pattern %s: %w", p.Pattern, err)
+				return fmt.Errorf("failed to compile regex pattern %s: %w", p.Pattern, err)
 			}
-			regexMatcher[p.Name] = regex
+			p.Re = regex
+			regexMatcher[p.Name] = &p
 		}
 	}
 
@@ -252,7 +266,7 @@ func handler(ctx context.Context, s3Event events.S3Event) (string, error) {
 			fmt.Println("error processing object:", err)
 		}
 	}
-	return "Hello, World!", nil
+	return nil
 }
 
 func main() {
