@@ -1,14 +1,16 @@
 package main
 
 import (
-	"bytes"
+	"bufio"
 	"compress/gzip"
 	"context"
+	"encoding/csv"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/url"
 	"os"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -20,46 +22,45 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/cloudwatch"
 	"github.com/aws/aws-sdk-go-v2/service/cloudwatch/types"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
-
-	"github.com/shiimaxx/cloudwatch-alb-path-metrics/internal/matcher"
 )
 
 var s3Client *s3.Client
 var cwClient *cloudwatch.Client
 
-var m *matcher.Matcher
+var regexMatcher map[string]*regexp.Regexp
+
+type pathPattern struct {
+	Pattern string `json:"pattern"`
+	Name    string `json:"name"`
+}
 
 func normalizePath(method, path string) (string, bool) {
-	if name, found := m.Match(method, path); found {
-		return name, true
-	}
 	return "", false
 }
 
-func publishMetrics(ctx context.Context, t time.Time, path string, entries []string) error {
+func publishMetrics(ctx context.Context, t time.Time, path string, records [][]string) error {
 	var requestCount float64
 	var successfulRequestCount float64
 	latencies := make(map[float64]float64)
 	var metricData []types.MetricDatum
 
-	for _, entry := range entries {
-		sp := strings.Split(entry, " ")
-		requestProcessingTime, err := strconv.ParseFloat(sp[5], 64)
+	for _, record := range records {
+		requestProcessingTime, err := strconv.ParseFloat(record[5], 64)
 		if err != nil {
 			fmt.Println("failed to parse request processing time:", err)
 			continue
 		}
-		targetProcessingTime, err := strconv.ParseFloat(sp[6], 64)
+		targetProcessingTime, err := strconv.ParseFloat(record[6], 64)
 		if err != nil {
 			fmt.Println("failed to parse target processing time:", err)
 			continue
 		}
-		responseProcessingTime, err := strconv.ParseFloat(sp[7], 64)
+		responseProcessingTime, err := strconv.ParseFloat(record[7], 64)
 		if err != nil {
 			fmt.Println("failed to parse response processing time:", err)
 			continue
 		}
-		elbStatusCode, err := strconv.Atoi(sp[8])
+		elbStatusCode, err := strconv.Atoi(record[8])
 		if err != nil {
 			fmt.Println("failed to parse elb status code:", err)
 			continue
@@ -138,16 +139,20 @@ func publishMetrics(ctx context.Context, t time.Time, path string, entries []str
 	return nil
 }
 
-func processLogEntry(ctx context.Context, entries []string) error {
-	metrics := make(map[string]map[string][]string)
+func processLogEntry(ctx context.Context, reader *csv.Reader) error {
+	metrics := make(map[string]map[string][][]string)
 
-	for _, entry := range entries {
-		if entry == "" {
-			continue
+	for {
+		record, err := reader.Read()
+		if err == io.EOF {
+			break
 		}
 
-		sp := strings.Split(entry, " ")
-		t, err := time.Parse(time.RFC3339Nano, sp[1])
+		if err != nil {
+			return fmt.Errorf("failed to read CSV: %w", err)
+		}
+
+		t, err := time.Parse(time.RFC3339Nano, record[1])
 		if err != nil {
 			fmt.Println("failed to parse time:", err)
 			continue
@@ -155,9 +160,10 @@ func processLogEntry(ctx context.Context, entries []string) error {
 		t = t.Truncate(time.Minute)
 		tAsKey := t.Format(time.RFC3339Nano)
 
-		method := strings.TrimLeft(sp[12], "\"")
-		request := sp[13]
-		u, err := url.Parse(request)
+		request := record[12]
+		sp := strings.Split(request, " ")
+		method := sp[0]
+		u, err := url.Parse(sp[1])
 		if err != nil {
 			fmt.Println("failed to parse URL:", err)
 			continue
@@ -169,20 +175,20 @@ func processLogEntry(ctx context.Context, entries []string) error {
 		}
 
 		if _, ok := metrics[normalizedPath]; !ok {
-			metrics[normalizedPath] = make(map[string][]string)
+			metrics[normalizedPath] = make(map[string][][]string)
 		}
 
-		metrics[normalizedPath][tAsKey] = append(metrics[normalizedPath][tAsKey], entry)
+		metrics[normalizedPath][tAsKey] = append(metrics[normalizedPath][tAsKey], record)
 	}
 
 	for path, timeMap := range metrics {
-		for t, entries := range timeMap {
+		for t, records := range timeMap {
 			parsedTime, err := time.Parse(time.RFC3339Nano, t)
 			if err != nil {
 				fmt.Println("failed to parse time:", err)
 				continue
 			}
-			publishMetrics(ctx, parsedTime, path, entries)
+			publishMetrics(ctx, parsedTime, path, records)
 		}
 	}
 
@@ -207,12 +213,9 @@ func processS3Object(ctx context.Context, client *s3.Client, bucket, key string)
 	}
 	defer zr.Close()
 
-	var buf bytes.Buffer
-	if _, err := io.Copy(&buf, zr); err != nil {
-		return fmt.Errorf("failed to read gzip content: %w", err)
-	}
-
-	processLogEntry(ctx, strings.Split(buf.String(), "\n"))
+	reader := bufio.NewReader(zr)
+	cr := csv.NewReader(reader)
+	processLogEntry(ctx, cr)
 
 	return nil
 }
@@ -225,13 +228,21 @@ func handler(ctx context.Context, s3Event events.S3Event) (string, error) {
 	s3Client = s3.NewFromConfig(cfg)
 	cwClient = cloudwatch.NewFromConfig(cfg)
 
-	// [{"method:"GET","pattern":"/api/v1/users/:id","name":"GetUser"},{"method":"POST","pattern":"/api/v1/users","name":"CreateUser"}]
-	var routes []matcher.Route
+	// [{"pattern":"GET /api/v1/users/\d","name":"GetUser"},{"pattern":"/api/v1/users","name":"CreateUser"}]
+	var pp []pathPattern
 	if pathPatterns := os.Getenv("PATH_PATTERNS"); pathPatterns != "" {
-		if err := json.Unmarshal([]byte(pathPatterns), &routes); err != nil {
+		if err := json.Unmarshal([]byte(pathPatterns), &pp); err != nil {
 			return "", fmt.Errorf("failed to unmarshal path patterns: %w", err)
 		}
-		m = matcher.New(routes)
+
+		regexMatcher = make(map[string]*regexp.Regexp)
+		for _, p := range pp {
+			regex, err := regexp.Compile(p.Pattern)
+			if err != nil {
+				return "", fmt.Errorf("failed to compile regex pattern %s: %w", p.Pattern, err)
+			}
+			regexMatcher[p.Name] = regex
+		}
 	}
 
 	for _, record := range s3Event.Records {
