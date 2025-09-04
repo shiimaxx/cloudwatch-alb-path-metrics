@@ -280,7 +280,7 @@ func handler(ctx context.Context, s3Event events.S3Event) error {
 
 		pathFilterRules = make(map[string]*pathFilterRule)
 		for _, p := range pp {
-			program, err := expr.Compile(p.Expr)
+			program, err := expr.Compile(p.Expr, expr.AsBool())
 			if err != nil {
 				return fmt.Errorf("failed to compile expression %s: %w", p.Expr, err)
 			}
