@@ -10,7 +10,6 @@ import (
 	"io"
 	"net/url"
 	"os"
-	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -22,23 +21,35 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/cloudwatch"
 	"github.com/aws/aws-sdk-go-v2/service/cloudwatch/types"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
+	"github.com/expr-lang/expr"
+	"github.com/expr-lang/expr/vm"
 )
 
 var s3Client *s3.Client
 var cwClient *cloudwatch.Client
 
-var regexMatcher map[string]*pathPattern
+var pathFilterRules map[string]*pathFilterRule
 
-type pathPattern struct {
-	Method  string `json:"method"`
-	Pattern string `json:"pattern"`
-	Name    string `json:"name"`
-	Re      *regexp.Regexp
+type pathFilterRule struct {
+	Name string `json:"name"`
+	Expr string `json:"expr"`
+	Program *vm.Program
 }
 
 func normalizePath(method, path string) (string, bool) {
-	for name, p := range regexMatcher {
-		if p.Method == method && p.Re.MatchString(path) {
+	env := map[string]any{
+		"method": method,
+		"path":   path,
+	}
+	
+	for name, p := range pathFilterRules {
+		result, err := expr.Run(p.Program, env)
+		if err != nil {
+			fmt.Printf("failed to evaluate expression for %s: %v\n", name, err)
+			continue
+		}
+		
+		if matched, ok := result.(bool); ok && matched {
 			return name, true
 		}
 	}
@@ -261,21 +272,20 @@ func handler(ctx context.Context, s3Event events.S3Event) error {
 	//   {"method":"GET", "pattern":"/api/v1/users/\d","name":"GetUser"},
 	//   {"method":"POST", "pattern":"/api/v1/users","name":"CreateUser"}
 	// ]
-	var pp []pathPattern
+	var pp []pathFilterRule
 	if pathPatterns := os.Getenv("PATH_PATTERNS"); pathPatterns != "" {
 		if err := json.Unmarshal([]byte(pathPatterns), &pp); err != nil {
 			return fmt.Errorf("failed to unmarshal path patterns: %w", err)
 		}
 
-		regexMatcher = make(map[string]*pathPattern)
+		pathFilterRules = make(map[string]*pathFilterRule)
 		for _, p := range pp {
-			p := p
-			regex, err := regexp.Compile(p.Pattern)
+			program, err := expr.Compile(p.Expr)
 			if err != nil {
-				return fmt.Errorf("failed to compile regex pattern %s: %w", p.Pattern, err)
+				return fmt.Errorf("failed to compile expression %s: %w", p.Expr, err)
 			}
-			p.Re = regex
-			regexMatcher[p.Name] = &p
+			p.Program = program
+			pathFilterRules[p.Name] = &p
 		}
 	}
 
