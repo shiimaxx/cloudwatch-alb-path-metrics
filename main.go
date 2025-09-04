@@ -45,7 +45,7 @@ func normalizePath(method, path string) (string, bool) {
 	return "", false
 }
 
-func publishMetrics(ctx context.Context, t time.Time, path string, records [][]string) error {
+func publishMetrics(ctx context.Context, t time.Time, path, serviceName string, records [][]string) error {
 	var requestCount float64
 	var successfulRequestCount float64
 	latencies := make(map[float64]float64)
@@ -97,6 +97,10 @@ func publishMetrics(ctx context.Context, t time.Time, path string, records [][]s
 				Name:  aws.String("Path"),
 				Value: aws.String(path),
 			},
+			{
+				Name:  aws.String("Service"),
+				Value: aws.String(serviceName),
+			},
 		},
 		Value: aws.Float64(requestCount),
 		Unit:  types.StandardUnitCount,
@@ -109,6 +113,10 @@ func publishMetrics(ctx context.Context, t time.Time, path string, records [][]s
 			{
 				Name:  aws.String("Path"),
 				Value: aws.String(path),
+			},
+			{
+				Name:  aws.String("Service"),
+				Value: aws.String(serviceName),
 			},
 		},
 		Value: aws.Float64(successfulRequestCount),
@@ -129,6 +137,10 @@ func publishMetrics(ctx context.Context, t time.Time, path string, records [][]s
 				Name:  aws.String("Path"),
 				Value: aws.String(path),
 			},
+			{
+				Name:  aws.String("Service"),
+				Value: aws.String(serviceName),
+			},
 		},
 		Values: latencyValues,
 		Counts: latencyCounts,
@@ -146,7 +158,7 @@ func publishMetrics(ctx context.Context, t time.Time, path string, records [][]s
 	return nil
 }
 
-func processLogEntry(ctx context.Context, reader *csv.Reader) error {
+func processLogEntry(ctx context.Context, reader *csv.Reader, serviceName string) error {
 	metrics := make(map[string]map[string][][]string)
 
 	for {
@@ -195,14 +207,14 @@ func processLogEntry(ctx context.Context, reader *csv.Reader) error {
 				fmt.Println("failed to parse time:", err)
 				continue
 			}
-			publishMetrics(ctx, parsedTime, path, records)
+			publishMetrics(ctx, parsedTime, path, serviceName, records)
 		}
 	}
 
 	return nil
 }
 
-func processS3Object(ctx context.Context, client *s3.Client, bucket, key string) error {
+func processS3Object(ctx context.Context, client *s3.Client, bucket, key, serviceName string) error {
 	fmt.Printf("Processing object %s from bucket %s\n", key, bucket)
 
 	out, err := client.GetObject(ctx, &s3.GetObjectInput{
@@ -225,7 +237,7 @@ func processS3Object(ctx context.Context, client *s3.Client, bucket, key string)
 	cr.Comma = ' '
 	cr.ReuseRecord = true
 
-	if err := processLogEntry(ctx, cr); err != nil {
+	if err := processLogEntry(ctx, cr, serviceName); err != nil {
 		return fmt.Errorf("failed to process log entry: %w", err)
 	}
 
@@ -239,6 +251,11 @@ func handler(ctx context.Context, s3Event events.S3Event) error {
 	}
 	s3Client = s3.NewFromConfig(cfg)
 	cwClient = cloudwatch.NewFromConfig(cfg)
+
+	serviceName := os.Getenv("SERVICE")
+	if serviceName == "" {
+		return fmt.Errorf("SERVICE environment variable is required")
+	}
 
 	// [
 	//   {"method":"GET", "pattern":"/api/v1/users/\d","name":"GetUser"},
@@ -263,7 +280,7 @@ func handler(ctx context.Context, s3Event events.S3Event) error {
 	}
 
 	for _, record := range s3Event.Records {
-		if err := processS3Object(ctx, s3Client, record.S3.Bucket.Name, record.S3.Object.Key); err != nil {
+		if err := processS3Object(ctx, s3Client, record.S3.Bucket.Name, record.S3.Object.Key, serviceName); err != nil {
 			fmt.Println("error processing object:", err)
 		}
 	}
