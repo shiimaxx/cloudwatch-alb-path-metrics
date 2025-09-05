@@ -77,7 +77,7 @@ func normalizePath(method, path string) (string, bool) {
 	return groupName, true
 }
 
-func publishMetrics(ctx context.Context, t time.Time, group, serviceName string, records [][]string) error {
+func publishMetrics(ctx context.Context, t time.Time, service, host, group string, records [][]string) error {
 	var requestCount float64
 	var successfulRequestCount float64
 	latencies := make(map[float64]float64)
@@ -126,12 +126,16 @@ func publishMetrics(ctx context.Context, t time.Time, group, serviceName string,
 		Timestamp:  aws.Time(t),
 		Dimensions: []types.Dimension{
 			{
-				Name:  aws.String("Group"),
-				Value: aws.String(group),
+				Name:  aws.String("Service"),
+				Value: aws.String(service),
 			},
 			{
-				Name:  aws.String("Service"),
-				Value: aws.String(serviceName),
+				Name:  aws.String("Host"),
+				Value: aws.String(host),
+			},
+			{
+				Name:  aws.String("Group"),
+				Value: aws.String(group),
 			},
 		},
 		Value: aws.Float64(requestCount),
@@ -143,12 +147,16 @@ func publishMetrics(ctx context.Context, t time.Time, group, serviceName string,
 		Timestamp:  aws.Time(t),
 		Dimensions: []types.Dimension{
 			{
-				Name:  aws.String("Group"),
-				Value: aws.String(group),
+				Name:  aws.String("Service"),
+				Value: aws.String(service),
+			},
+			{
+				Name:  aws.String("Host"),
+				Value: aws.String(host),
 			},
 			{
 				Name:  aws.String("Group"),
-				Value: aws.String(serviceName),
+				Value: aws.String(group),
 			},
 		},
 		Value: aws.Float64(successfulRequestCount),
@@ -166,12 +174,16 @@ func publishMetrics(ctx context.Context, t time.Time, group, serviceName string,
 		Timestamp:  aws.Time(t),
 		Dimensions: []types.Dimension{
 			{
-				Name:  aws.String("Group"),
-				Value: aws.String(group),
+				Name:  aws.String("Service"),
+				Value: aws.String(service),
 			},
 			{
-				Name:  aws.String("Service"),
-				Value: aws.String(serviceName),
+				Name:  aws.String("Host"),
+				Value: aws.String(host),
+			},
+			{
+				Name:  aws.String("Group"),
+				Value: aws.String(group),
 			},
 		},
 		Values: latencyValues,
@@ -190,7 +202,7 @@ func publishMetrics(ctx context.Context, t time.Time, group, serviceName string,
 	return nil
 }
 
-func processLogEntry(ctx context.Context, reader *csv.Reader, serviceName string) error {
+func processLogEntry(ctx context.Context, reader *csv.Reader, service string) error {
 	metrics := make(map[string]map[string][][]string)
 
 	for {
@@ -220,26 +232,26 @@ func processLogEntry(ctx context.Context, reader *csv.Reader, serviceName string
 			continue
 		}
 
-		normalizedPath, allowed := normalizePath(method, u.Path)
+		group, allowed := normalizePath(method, u.Path)
 		if !allowed {
 			continue
 		}
 
-		if _, ok := metrics[normalizedPath]; !ok {
-			metrics[normalizedPath] = make(map[string][][]string)
+		if _, ok := metrics[group]; !ok {
+			metrics[group] = make(map[string][][]string)
 		}
 
-		metrics[normalizedPath][tAsKey] = append(metrics[normalizedPath][tAsKey], record)
+		metrics[group][tAsKey] = append(metrics[group][tAsKey], record)
 	}
 
-	for path, timeMap := range metrics {
+	for group, timeMap := range metrics {
 		for t, records := range timeMap {
 			parsedTime, err := time.Parse(time.RFC3339Nano, t)
 			if err != nil {
 				fmt.Println("failed to parse time:", err)
 				continue
 			}
-			publishMetrics(ctx, parsedTime, path, serviceName, records)
+			publishMetrics(ctx, parsedTime, service, "", group, records)
 		}
 	}
 
