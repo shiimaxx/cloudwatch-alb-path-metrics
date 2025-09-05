@@ -31,8 +31,8 @@ var cwClient *cloudwatch.Client
 var pathFilterRules map[string]*pathFilterRule
 
 type pathFilterRule struct {
-	Name string `json:"name"`
-	Expr string `json:"expr"`
+	Name    string `json:"name"`
+	Expr    string `json:"expr"`
 	Program *vm.Program
 }
 
@@ -41,15 +41,18 @@ func normalizePath(method, path string) (string, bool) {
 		"method": method,
 		"path":   path,
 	}
-	
+
+	fmt.Println("Evaluating path:", path, "with method:", method)
+
 	for name, p := range pathFilterRules {
-		result, err := expr.Run(p.Program, env)
+		matched, err := expr.Run(p.Program, env)
 		if err != nil {
 			fmt.Printf("failed to evaluate expression for %s: %v\n", name, err)
 			continue
 		}
-		
-		if matched, ok := result.(bool); ok && matched {
+
+		if matched.(bool) {
+			fmt.Println("Matched path pattern:", name, "for path:", path)
 			return name, true
 		}
 	}
