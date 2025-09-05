@@ -77,7 +77,7 @@ func normalizePath(method, path string) (string, bool) {
 	return groupName, true
 }
 
-func publishMetrics(ctx context.Context, t time.Time, path, serviceName string, records [][]string) error {
+func publishMetrics(ctx context.Context, t time.Time, group, serviceName string, records [][]string) error {
 	var requestCount float64
 	var successfulRequestCount float64
 	latencies := make(map[float64]float64)
@@ -126,8 +126,8 @@ func publishMetrics(ctx context.Context, t time.Time, path, serviceName string, 
 		Timestamp:  aws.Time(t),
 		Dimensions: []types.Dimension{
 			{
-				Name:  aws.String("Path"),
-				Value: aws.String(path),
+				Name:  aws.String("Group"),
+				Value: aws.String(group),
 			},
 			{
 				Name:  aws.String("Service"),
@@ -143,11 +143,11 @@ func publishMetrics(ctx context.Context, t time.Time, path, serviceName string, 
 		Timestamp:  aws.Time(t),
 		Dimensions: []types.Dimension{
 			{
-				Name:  aws.String("Path"),
-				Value: aws.String(path),
+				Name:  aws.String("Group"),
+				Value: aws.String(group),
 			},
 			{
-				Name:  aws.String("Service"),
+				Name:  aws.String("Group"),
 				Value: aws.String(serviceName),
 			},
 		},
@@ -166,8 +166,8 @@ func publishMetrics(ctx context.Context, t time.Time, path, serviceName string, 
 		Timestamp:  aws.Time(t),
 		Dimensions: []types.Dimension{
 			{
-				Name:  aws.String("Path"),
-				Value: aws.String(path),
+				Name:  aws.String("Group"),
+				Value: aws.String(group),
 			},
 			{
 				Name:  aws.String("Service"),
