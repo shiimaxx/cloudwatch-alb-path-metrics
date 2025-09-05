@@ -22,59 +22,20 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/cloudwatch/types"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/expr-lang/expr"
-	"github.com/expr-lang/expr/vm"
 )
 
 var s3Client *s3.Client
 var cwClient *cloudwatch.Client
 
-var filterProgram *vm.Program
 var groupPatterns []*regexp.Regexp
 
-func isRequestAllowed(method, path string) bool {
-	if filterProgram == nil {
-		return true
-	}
-
-	env := map[string]any{
-		"method": method,
-		"path":   path,
-	}
-
-	result, err := expr.Run(filterProgram, env)
-	if err != nil {
-		fmt.Printf("failed to evaluate filter expression: %v\n", err)
-		return false
-	}
-
-	return result.(bool)
-}
-
-func getPathGroup(path string) (string, bool) {
+func getPathGroup(path string) string {
 	for _, pattern := range groupPatterns {
 		if pattern.MatchString(path) {
-			return pattern.String(), true
+			return pattern.String()
 		}
 	}
-	return "", false
-}
-
-func normalizePath(method, path string) (string, bool) {
-	fmt.Println("Evaluating path:", path, "with method:", method)
-
-	if !isRequestAllowed(method, path) {
-		fmt.Println("Request filtered out:", method, path)
-		return "", false
-	}
-
-	groupName, found := getPathGroup(path)
-	if !found {
-		fmt.Println("No matching group pattern for path:", path)
-		return "", false
-	}
-
-	fmt.Println("Matched group pattern:", groupName, "for path:", path)
-	return groupName, true
+	return ""
 }
 
 func publishMetrics(ctx context.Context, t time.Time, service, host, group string, records [][]string) error {
@@ -232,8 +193,14 @@ func processLogEntry(ctx context.Context, reader *csv.Reader, service string) er
 			continue
 		}
 
-		group, allowed := normalizePath(method, u.Path)
-		if !allowed {
+		if !filter(method, u.Host, u.Path) {
+			fmt.Println("Request filtered out:", method, u.Host, u.Path)
+			continue
+		}
+
+		group := getPathGroup(u.Path)
+		if group == "" {
+			fmt.Println("No matching group pattern for path:", u.Path)
 			continue
 		}
 
