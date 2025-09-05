@@ -5,11 +5,11 @@ import (
 	"compress/gzip"
 	"context"
 	"encoding/csv"
-	"encoding/json"
 	"fmt"
 	"io"
 	"net/url"
 	"os"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -28,35 +28,53 @@ import (
 var s3Client *s3.Client
 var cwClient *cloudwatch.Client
 
-var pathFilterRules map[string]*pathFilterRule
+var filterProgram *vm.Program
+var groupPatterns []*regexp.Regexp
 
-type pathFilterRule struct {
-	Name    string `json:"name"`
-	Expr    string `json:"expr"`
-	Program *vm.Program
-}
+func isRequestAllowed(method, path string) bool {
+	if filterProgram == nil {
+		return true
+	}
 
-func normalizePath(method, path string) (string, bool) {
 	env := map[string]any{
 		"method": method,
 		"path":   path,
 	}
 
-	fmt.Println("Evaluating path:", path, "with method:", method)
+	result, err := expr.Run(filterProgram, env)
+	if err != nil {
+		fmt.Printf("failed to evaluate filter expression: %v\n", err)
+		return false
+	}
 
-	for name, p := range pathFilterRules {
-		matched, err := expr.Run(p.Program, env)
-		if err != nil {
-			fmt.Printf("failed to evaluate expression for %s: %v\n", name, err)
-			continue
-		}
+	return result.(bool)
+}
 
-		if matched.(bool) {
-			fmt.Println("Matched path pattern:", name, "for path:", path)
-			return name, true
+func getPathGroup(path string) (string, bool) {
+	for _, pattern := range groupPatterns {
+		if pattern.MatchString(path) {
+			return pattern.String(), true
 		}
 	}
 	return "", false
+}
+
+func normalizePath(method, path string) (string, bool) {
+	fmt.Println("Evaluating path:", path, "with method:", method)
+
+	if !isRequestAllowed(method, path) {
+		fmt.Println("Request filtered out:", method, path)
+		return "", false
+	}
+
+	groupName, found := getPathGroup(path)
+	if !found {
+		fmt.Println("No matching group pattern for path:", path)
+		return "", false
+	}
+
+	fmt.Println("Matched group pattern:", groupName, "for path:", path)
+	return groupName, true
 }
 
 func publishMetrics(ctx context.Context, t time.Time, path, serviceName string, records [][]string) error {
@@ -271,24 +289,30 @@ func handler(ctx context.Context, s3Event events.S3Event) error {
 		return fmt.Errorf("SERVICE environment variable is required")
 	}
 
-	// [
-	//   {"method":"GET", "pattern":"/api/v1/users/\d","name":"GetUser"},
-	//   {"method":"POST", "pattern":"/api/v1/users","name":"CreateUser"}
-	// ]
-	var pp []pathFilterRule
-	if pathPatterns := os.Getenv("PATH_PATTERNS"); pathPatterns != "" {
-		if err := json.Unmarshal([]byte(pathPatterns), &pp); err != nil {
-			return fmt.Errorf("failed to unmarshal path patterns: %w", err)
+	if envFilter := os.Getenv("FILTER"); envFilter != "" {
+		program, err := expr.Compile(envFilter, expr.AsBool())
+		if err != nil {
+			return fmt.Errorf("failed to compile filter expression: %w", err)
 		}
+		filterProgram = program
+	}
 
-		pathFilterRules = make(map[string]*pathFilterRule)
-		for _, p := range pp {
-			program, err := expr.Compile(p.Expr, expr.AsBool())
-			if err != nil {
-				return fmt.Errorf("failed to compile expression %s: %w", p.Expr, err)
+	if envGroups := os.Getenv("GROUPS"); envGroups != "" {
+		patterns := strings.Split(envGroups, ",")
+		groupPatterns = make([]*regexp.Regexp, 0, len(patterns))
+
+		for _, pattern := range patterns {
+			pattern = strings.TrimSpace(pattern)
+			if pattern == "" {
+				continue
 			}
-			p.Program = program
-			pathFilterRules[p.Name] = &p
+
+			re, err := regexp.Compile(pattern)
+			if err != nil {
+				return fmt.Errorf("failed to compile regex pattern %s: %w", pattern, err)
+			}
+
+			groupPatterns = append(groupPatterns, re)
 		}
 	}
 

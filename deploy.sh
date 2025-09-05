@@ -10,4 +10,4 @@ aws lambda update-function-code \
 aws lambda update-function-configuration \
   --no-paginate \
   --function-name cloudwatch-alb-path-metrics \
-  --environment Variables="{SERVICE=hello,PATH_PATTERNS='[{\"name\":\"/graphql\", \"expr\":\"method == \\\"POST\\\" && path matches \\\"/graphql\\\"\"}]'}"
+  --environment Variables="{SERVICE=hello,FILTER='method == \"POST\" && path matches \"/graphql\"',GROUPS='^/graphql$'}"
