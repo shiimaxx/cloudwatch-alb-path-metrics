@@ -251,7 +251,7 @@ func processLogEntry(ctx context.Context, reader *csv.Reader, service string) er
 				fmt.Println("failed to parse time:", err)
 				continue
 			}
-			publishMetrics(ctx, parsedTime, service, "", group, records)
+			publishMetrics(ctx, parsedTime, service, "example.com", group, records)
 		}
 	}
 
