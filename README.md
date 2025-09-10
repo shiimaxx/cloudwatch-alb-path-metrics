@@ -38,8 +38,8 @@ This project provides a quick and easy solution for path-based metrics collectio
 |----------|-------------|----------|---------|
 | `NAMESPACE` | CloudWatch custom metrics namespace | Yes | `MyApplication/ALB` |
 | `SERVICE` | Service name | Yes | `web-api` |
-| `FILTER` | Log entry filtering conditions ([expr](https://github.com/expr-lang/expr) format) | No | `method == "GET" && status_code < 400` |
-| `PATH_GROUP_REGEXES` | Regular expressions for path grouping (comma-separated) | No | `/api/users/\d+,/api/orders/\d+` |
+| `FILTER` | Log entry filtering conditions ([expr](https://github.com/expr-lang/expr) format) | No | [Filter Condition Examples](#filter-condition-examples) |
+| `PATH_GROUP_REGEXES` | Regular expressions for path grouping (comma-separated) | No | [Path Grouping Examples](#path-grouping-examples) |
 
 ### Filter Condition Examples
 
