@@ -2,7 +2,6 @@ package main
 
 import (
 	"errors"
-	"strings"
 
 	"github.com/expr-lang/expr"
 	"github.com/expr-lang/expr/vm"
@@ -15,11 +14,6 @@ type filterEnv struct {
 	Path     string  `expr:"path"`     // Request path
 	Status   int     `expr:"status"`   // HTTP status code
 	Duration float64 `expr:"duration"` // Response time in seconds
-}
-
-// Contains provides string contains functionality for filter expressions
-func (filterEnv) Contains(str, substr string) bool {
-	return strings.Contains(str, substr)
 }
 
 // filter represents a compiled filter expression

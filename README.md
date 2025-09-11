@@ -47,14 +47,14 @@ This project provides a quick and easy solution for path-based metrics collectio
 # Only GET requests
 FILTER='method == "GET"'
 
-# Exclude specific paths
-FILTER='!contains(path, "/health") && !contains(path, "/metrics")'
+# Exclude specific paths using string contains
+FILTER='path != "/health" && path != "/metrics"'
 
 # Filter by specific host
 FILTER='host == "api.example.com"'
 
 # Combine multiple conditions
-FILTER='method == "POST" && contains(path, "/api/") && host == "api.example.com"'
+FILTER='method == "POST" && host == "api.example.com"'
 ```
 
 ### Path Grouping Examples
