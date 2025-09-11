@@ -7,30 +7,38 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+	"time"
 )
 
 type albLogEntry struct {
-	method   string
-	host     string
-	path     string
-	status   int
-	duration float64
+	timestamp time.Time
+	method    string
+	host      string
+	path      string
+	status    int
+	duration  float64
 }
 
 // AWS ALB log field constants (0-based indices)
 // Fields: type time elb client:port target:port request_processing_time target_processing_time response_processing_time
-//
 //	elb_status_code target_status_code received_bytes sent_bytes "request" "user_agent" ssl_cipher ssl_protocol
 //	target_group_arn "trace_id" "domain_name" "chosen_cert_arn" matched_rule_priority request_creation_time
 //	"actions_executed" "redirect_url" "error_reason" "target:port_list" "target_status_code_list"
 //	"classification" "classification_reason" conn_trace_id
 const (
-	durationFieldIndex = 6
-	statusFieldIndex   = 8
-	requestFieldIndex  = 12
+	timestampFieldIndex = 1
+	durationFieldIndex  = 6
+	statusFieldIndex    = 8
+	requestFieldIndex   = 12
 )
 
 func parseALBLogFields(fields []string) (*albLogEntry, error) {
+	// Parse timestamp (ISO 8601 format: 2018-07-02T22:23:00.186641Z)
+	timestamp, err := time.Parse(time.RFC3339Nano, fields[timestampFieldIndex])
+	if err != nil {
+		return nil, errors.New("failed to parse timestamp: " + err.Error())
+	}
+
 	status, err := strconv.Atoi(fields[statusFieldIndex])
 	if err != nil {
 		return nil, errors.New("failed to parse status: " + err.Error())
@@ -55,11 +63,12 @@ func parseALBLogFields(fields []string) (*albLogEntry, error) {
 	}
 
 	return &albLogEntry{
-		method:   method,
-		host:     u.Host,
-		path:     u.Path,
-		status:   status,
-		duration: duration,
+		timestamp: timestamp,
+		method:    method,
+		host:      u.Host,
+		path:      u.Path,
+		status:    status,
+		duration:  duration,
 	}, nil
 }
 

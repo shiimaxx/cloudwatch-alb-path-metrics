@@ -4,6 +4,7 @@ import (
 	"encoding/csv"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 )
@@ -31,12 +32,26 @@ func TestParseALBLogFields(t *testing.T) {
 		{
 			name:   "basic GET request",
 			fields: parseLogEntry(t, getLogEntry),
-			want:   albLogEntry{method: "GET", host: "api.example.com", path: "/users/123", status: 200, duration: 0.001},
+			want:   albLogEntry{
+				timestamp: time.Date(2024, 1, 15, 10, 0, 0, 0, time.UTC),
+				method:    "GET",
+				host:      "api.example.com",
+				path:      "/users/123",
+				status:    200,
+				duration:  0.001,
+			},
 		},
 		{
 			name:   "POST request with different path",
 			fields: parseLogEntry(t, postLogEntry),
-			want:   albLogEntry{method: "POST", host: "api.example.com", path: "/api/orders", status: 201, duration: 0.002},
+			want:   albLogEntry{
+				timestamp: time.Date(2024, 1, 15, 10, 0, 1, 0, time.UTC),
+				method:    "POST",
+				host:      "api.example.com",
+				path:      "/api/orders",
+				status:    201,
+				duration:  0.002,
+			},
 		},
 	}
 
@@ -45,6 +60,7 @@ func TestParseALBLogFields(t *testing.T) {
 			got, err := parseALBLogFields(tt.fields)
 
 			assert.NoError(t, err)
+			assert.Equal(t, tt.want.timestamp, got.timestamp)
 			assert.Equal(t, tt.want.method, got.method)
 			assert.Equal(t, tt.want.host, got.host)
 			assert.Equal(t, tt.want.path, got.path)
