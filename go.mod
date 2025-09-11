@@ -5,11 +5,14 @@ go 1.24.1
 require github.com/aws/aws-lambda-go v1.49.0
 
 require (
+	github.com/aws/aws-sdk-go-v2 v1.39.0
+	github.com/aws/aws-sdk-go-v2/service/cloudwatch v1.50.1
 	github.com/expr-lang/expr v1.17.6
 	github.com/stretchr/testify v1.7.2
 )
 
 require (
+	github.com/aws/smithy-go v1.23.0 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
