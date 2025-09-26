@@ -20,7 +20,7 @@ AWS-native tooling does not surface path-level metrics out of the box; you must 
 |----------|-------------|----------|---------|
 | `NAMESPACE` | CloudWatch custom metrics namespace | Yes | `MyApplication/ALB` |
 | `SERVICE` | Service name | Yes | `web-api` |
-| `INCLUDE_PATH_RULES` | JSON array describing host-aware path normalization rules | No | `[{"host":"example.com","path":"^/users/[0-9]+$","name":"/users/:id"}]` |
+| `INCLUDE_PATH_RULES` | JSON array describing host-aware path normalization rules | No | `[{"host":"example.com","path":"^/users/[0-9]+$","route":"/users/:id"}]` |
 
 ### Path Rules
 
@@ -28,13 +28,13 @@ Define path rules to group high-cardinality URLs into stable patterns before pub
 
 - `host` (required): Exact host name comparison performed against the log entry.
 - `path` (required): Regular expression applied to the request path.
-- `name` (required): Normalized path string emitted in the `Path` dimension when both host and regex match.
+- `route` (required): Normalized path string emitted in the `Path` dimension when both host and regex match.
 
 ```json
 [
-  {"host":"example.com","path":"^/users/[0-9]+$","name":"/users/:id"},
-  {"host":"example.com","path":"^/articles/(?:[a-z0-9-]+)/comments$","name":"/article/:slug/comments"},
-  {"host":"admin.example.com","path":"^/dashboard(?:/.*)?$","name":"/dashboard/*"}
+  {"host":"example.com","path":"^/users/[0-9]+$","route":"/users/:id"},
+  {"host":"example.com","path":"^/articles/(?:[a-z0-9-]+)/comments$","route":"/article/:slug/comments"},
+  {"host":"admin.example.com","path":"^/dashboard(?:/.*)?$","route":"/dashboard/*"}
 ]
 ```
 
@@ -45,3 +45,19 @@ This configuration performs the following transformations when both host and pat
 - `https://admin.example.com/dashboard/settings` → `/dashboard/*`
 
 Log entries that do not match any rule are ignored.
+
+## Metrics
+
+| Name | Unit | Value |
+|------|------|-------|
+| `ResponseTime` | Seconds | Latency per request measured from ALB log timings |
+| `RequestCount` | Count | Always 1 for each processed request |
+| `FailedRequestCount` | Count | 1 for requests classified as failures, otherwise omitted |
+
+## Dimensions
+
+| Name | Description | Example |
+|------|-------------|---------|
+| `Method` | HTTP method extracted from the ALB log entry | `GET` |
+| `Host` | Request host used to route traffic | `api.example.com` |
+| `Route` | Normalized logical path name after applying `INCLUDE_PATH_RULES` | `UsersById` |
