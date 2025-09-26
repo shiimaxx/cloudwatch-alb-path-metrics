@@ -19,7 +19,7 @@ AWS-native tooling does not surface path-level metrics out of the box; you must 
 | Variable | Description | Required | Example |
 |----------|-------------|----------|---------|
 | `NAMESPACE` | CloudWatch custom metrics namespace | Yes | `MyApplication/ALB` |
-| `SERVICE` | Service name | Yes | `web-api` |
+| `SERVICE` | Service name used as the `Service` metric dimension | Yes | `web-api` |
 | `INCLUDE_PATH_RULES` | JSON array describing host-aware path normalization rules | No | `[{"host":"example.com","path":"^/users/[0-9]+$","route":"/users/:id"}]` |
 
 ### Path Rules
@@ -44,20 +44,21 @@ This configuration performs the following transformations when both host and pat
 - `https://example.com/articles/next-gen-observability/comments` → `/article/:slug/comments`
 - `https://admin.example.com/dashboard/settings` → `/dashboard/*`
 
-Log entries that do not match any rule are ignored.
+Log entries that do not match any rule are ignored to prevent Route dimension cardinality from exploding.
 
 ## Metrics
 
 | Name | Unit | Value |
 |------|------|-------|
-| `ResponseTime` | Seconds | Latency per request measured from ALB log timings |
+| `ResponseTime` | Seconds | Total ALB latency (`request_processing_time + target_processing_time + response_processing_time`) per request |
 | `RequestCount` | Count | Always 1 for each processed request |
-| `FailedRequestCount` | Count | 1 for requests classified as failures, otherwise omitted |
+| `FailedRequestCount` | Count | 1 for requests with 5xx responses, otherwise omitted |
 
 ## Dimensions
 
 | Name | Description | Example |
 |------|-------------|---------|
+| `Service` | Value of the `SERVICE` environment variable | `web-api` |
 | `Method` | HTTP method extracted from the ALB log entry | `GET` |
 | `Host` | Request host used to route traffic | `api.example.com` |
 | `Route` | Normalized logical path name after applying `INCLUDE_PATH_RULES` | `UsersById` |
