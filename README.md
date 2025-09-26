@@ -8,27 +8,9 @@ This project provides a Lambda function that analyzes Application Load Balancer 
 
 ## Motivation
 
-ALB-level metrics serve as an effective starting point for SLI/SLO implementation. However, for systems where a single ALB handles all requests, this approach cannot provide meaningful SLIs for individual features or services since all requests are aggregated together.
+ALB-level metrics serve as an effective starting point for SLI/SLO implementations. However, when a single ALB fronts every request, those metrics remain coarse aggregates that mask per-feature or per-service behavior. Teams still need a way to observe how individual endpoints perform.
 
-This project provides a quick and easy solution for path-based metrics collection using only AWS services, enabling granular and actionable SLI/SLO monitoring for each API endpoint or service path.
-
-## Features
-
-### Core Functionality
-
-- **Flexible Filtering**: Filter log entries for metrics conversion by HTTP method, host, and path
-- **Path Grouping**: Group paths using regular expressions to control cardinality
-- **Duration Metrics**: Measure processing time (seconds) from HTTP request reception to response delivery
-
-### Deployment Model
-
-- **S3 Triggered Execution**: Lambda function automatically executes when ALB logs are stored in S3
-
-### Metrics Specification
-
-| Metric | Description |
-|--------|-------------|
-| Duration | Time taken from receiving HTTP request to returning response.<br><br>**Reporting criteria:** There is a nonzero value<br><br>**Statistics:** The most useful statistics are Average and pNN.NN (percentiles). <br><br>**Dimentions** <br>- `Service`,`Method`,`Host`,`Path` |
+AWS-native tooling does not surface path-level metrics out of the box; you must parse access logs and normalize URLs yourself to keep metric cardinality under control. This project automates that workflow with a Lambda function that turns ALB logs into curated CloudWatch metrics for each endpoint while staying entirely within managed AWS services.
 
 ## Configuration
 
@@ -38,65 +20,28 @@ This project provides a quick and easy solution for path-based metrics collectio
 |----------|-------------|----------|---------|
 | `NAMESPACE` | CloudWatch custom metrics namespace | Yes | `MyApplication/ALB` |
 | `SERVICE` | Service name | Yes | `web-api` |
-| `FILTER` | Log entry filtering conditions ([expr](https://github.com/expr-lang/expr) format) | No | [Filter Condition Examples](#filter-condition-examples) |
-| `PATH_GROUP_REGEXES` | Regular expressions for path grouping (comma-separated) | No | [Path Grouping Examples](#path-grouping-examples) |
+| `INCLUDE_PATH_RULES` | JSON array describing host-aware path normalization rules | No | `[{"host":"example.com","path":"^/users/[0-9]+$","name":"/users/:id"}]` |
 
-### Filter Condition Examples
+### Path Rules
 
-```bash
-# Only GET requests
-FILTER='method == "GET"'
+Define path rules to group high-cardinality URLs into stable patterns before publishing metrics. Provide a JSON array via `INCLUDE_PATH_RULES`, ordered from the most specific rule to the most general. Each rule object supports the following keys:
 
-# Exclude specific paths using string contains
-FILTER='path != "/health" && path != "/metrics"'
+- `host` (required): Exact host name comparison performed against the log entry.
+- `path` (required): Regular expression applied to the request path.
+- `name` (required): Normalized path string emitted in the `Path` dimension when both host and regex match.
 
-# Filter by specific host
-FILTER='host == "api.example.com"'
-
-# Combine multiple conditions
-FILTER='method == "POST" && host == "api.example.com"'
+```json
+[
+  {"host":"example.com","path":"^/users/[0-9]+$","name":"/users/:id"},
+  {"host":"example.com","path":"^/articles/(?:[a-z0-9-]+)/comments$","name":"/article/:slug/comments"},
+  {"host":"admin.example.com","path":"^/dashboard(?:/.*)?$","name":"/dashboard/*"}
+]
 ```
 
-### Path Grouping Examples
+This configuration performs the following transformations when both host and path match:
 
-```bash
-# Group paths containing user IDs or order IDs
-PATH_GROUP_REGEXES='/api/users/\d+,/api/orders/\d+,/api/products/[^/]+'
-```
+- `https://example.com/users/42` → `/users/:id`
+- `https://example.com/articles/next-gen-observability/comments` → `/article/:slug/comments`
+- `https://admin.example.com/dashboard/settings` → `/dashboard/*`
 
-This configuration performs the following transformations:
-- `/api/users/123` → `/api/users/\d+`
-- `/api/orders/456` → `/api/orders/\d+`
-- `/api/products/abc-def` → `/api/products/[^/]+`
-
-## Architecture
-
-### System Components
-
-```
-S3 Bucket (ALB Logs) → Lambda Function → CloudWatch Custom Metrics
-```
-
-### Processing Flow
-
-1. ALB outputs access logs to S3
-2. S3 event trigger activates Lambda function
-3. Lambda function retrieves and parses log files from S3
-4. Log entries are filtered based on configured filter conditions
-5. Paths are normalized according to path grouping settings
-6. Duration metrics are calculated and published to CloudWatch
-
-## Performance Optimization
-
-### Cost Optimization
-
-- **Cardinality Control**: Path grouping feature consolidates Path dimension values to avoid cardinality explosion
-- **API Call Reduction**: Utilize CloudWatch `PutMetricData` API with Values and Counts to minimize API calls
-
-### Metrics Aggregation
-
-The Lambda function pre-aggregates metrics with the same dimension combinations and sends them to CloudWatch in batches for efficient metric publishing.
-
-## License
-
-This project is released under the license described in the [LICENSE](LICENSE) file.
+Log entries that do not match any rule are ignored.
