@@ -26,72 +26,134 @@ func TestMetricAggregator_RecordAggregatesMetrics(t *testing.T) {
 	aggregator := NewMetricAggregator("TestNamespace", "TestService")
 
 	route := "/users/:id"
-	time1 := time.Date(2024, 1, 1, 12, 0, 0, 0, time.UTC)
-	time2 := time.Date(2024, 1, 1, 12, 5, 0, 0, time.UTC)
+	time1 := time.Date(2024, 1, 1, 12, 0, 10, 0, time.UTC)
+	time2 := time.Date(2024, 1, 1, 12, 0, 45, 0, time.UTC)
+	time3 := time.Date(2024, 1, 1, 12, 1, 5, 0, time.UTC)
 
 	aggregator.Record(albLogEntry{method: "GET", host: "example.com", status: 200, duration: 0.12, timestamp: time1}, route)
 	aggregator.Record(albLogEntry{method: "GET", host: "example.com", status: 502, duration: 0.34, timestamp: time2}, route)
+	aggregator.Record(albLogEntry{method: "GET", host: "example.com", status: 200, duration: 0.56, timestamp: time3}, route)
 
-	require.Len(t, aggregator.metrics, 1)
+	require.Len(t, aggregator.metrics, 2)
 
-	key := metricKey{Method: "GET", Host: "example.com", Route: route}
-	agg, ok := aggregator.metrics[key]
+	minute1Key := metricKey{Method: "GET", Host: "example.com", Route: route, Minute: time1.Truncate(time.Minute)}
+	minute1Agg, ok := aggregator.metrics[minute1Key]
 	require.True(t, ok)
-	assert.Equal(t, 1, agg.successCount)
-	assert.Equal(t, 1, agg.failedCount)
-	assert.Equal(t, []float64{0.12, 0.34}, agg.durations)
-	assert.Equal(t, time2, agg.latestRecorded)
+	assert.Equal(t, 1, minute1Agg.successCount)
+	assert.Equal(t, 1, minute1Agg.failedCount)
+	assert.Equal(t, []float64{0.12, 0.34}, minute1Agg.durations)
+
+	minute2Key := metricKey{Method: "GET", Host: "example.com", Route: route, Minute: time3.Truncate(time.Minute)}
+	minute2Agg, ok := aggregator.metrics[minute2Key]
+	require.True(t, ok)
+	assert.Equal(t, 1, minute2Agg.successCount)
+	assert.Equal(t, 0, minute2Agg.failedCount)
+	assert.Equal(t, []float64{0.56}, minute2Agg.durations)
 }
 
 func TestMetricAggregator_GetCloudWatchMetricData(t *testing.T) {
 	aggregator := NewMetricAggregator("TestNamespace", "TestService")
 
 	route := "/check"
-	time1 := time.Date(2024, 2, 1, 8, 0, 0, 0, time.UTC)
-	time2 := time.Date(2024, 2, 1, 8, 1, 0, 0, time.UTC)
+	time1 := time.Date(2024, 2, 1, 8, 0, 10, 0, time.UTC)
+	time2 := time.Date(2024, 2, 1, 8, 0, 40, 0, time.UTC)
+	time3 := time.Date(2024, 2, 1, 8, 1, 5, 0, time.UTC)
 
 	aggregator.Record(albLogEntry{method: "GET", host: "api.example.com", status: 200, duration: 0.5, timestamp: time1}, route)
 	aggregator.Record(albLogEntry{method: "GET", host: "api.example.com", status: 504, duration: 0.75, timestamp: time2}, route)
+	aggregator.Record(albLogEntry{method: "GET", host: "api.example.com", status: 200, duration: 0.6, timestamp: time3}, route)
 
 	metricData := aggregator.GetCloudWatchMetricData()
-	require.Len(t, metricData, 3)
+	require.Len(t, metricData, 6)
 
-	metricsByName := make(map[string]types.MetricDatum)
-	for _, datum := range metricData {
-		metricsByName[*datum.MetricName] = datum
-	}
+	minute1 := time1.Truncate(time.Minute)
+	minute2 := time3.Truncate(time.Minute)
 
-	require.Contains(t, metricsByName, metricNameResponseTime)
-	require.Contains(t, metricsByName, metricNameRequestCount)
-	require.Contains(t, metricsByName, metricNameFailedRequestCount)
+	var (
+		minute1Response     *types.MetricDatum
+		minute1RequestCount *types.MetricDatum
+		minute1FailedCount  *types.MetricDatum
+		minute2Response     *types.MetricDatum
+		minute2RequestCount *types.MetricDatum
+		minute2FailedCount  *types.MetricDatum
+	)
 
-	response := metricsByName[metricNameResponseTime]
-	assert.Equal(t, types.StandardUnitSeconds, response.Unit)
-	assert.ElementsMatch(t, []float64{0.5, 0.75}, response.Values)
-	assert.Equal(t, []float64{1, 1}, response.Counts)
-	assert.Equal(t, time2, *response.Timestamp)
-
-	requestCount := metricsByName[metricNameRequestCount]
-	assert.Equal(t, types.StandardUnitCount, requestCount.Unit)
-	assert.Equal(t, float64(1), *requestCount.Value)
-	assert.Equal(t, time2, *requestCount.Timestamp)
-
-	failedCount := metricsByName[metricNameFailedRequestCount]
-	assert.Equal(t, types.StandardUnitCount, failedCount.Unit)
-	assert.Equal(t, float64(1), *failedCount.Value)
-	assert.Equal(t, time2, *failedCount.Timestamp)
-
-	for _, datum := range metricData {
-		dimensions := make(map[string]string)
-		for _, dim := range datum.Dimensions {
-			dimensions[*dim.Name] = *dim.Value
+	for i := range metricData {
+		datum := metricData[i]
+		ts := time.Time{}
+		if datum.Timestamp != nil {
+			ts = datum.Timestamp.UTC()
 		}
 
-		assert.Equal(t, "TestService", dimensions["Service"])
-		assert.Equal(t, "GET", dimensions["Method"])
-		assert.Equal(t, "api.example.com", dimensions["Host"])
-		assert.Equal(t, route, dimensions["Route"])
+		dims := make(map[string]string)
+		for _, dim := range datum.Dimensions {
+			dims[*dim.Name] = *dim.Value
+		}
+		assert.Equal(t, "TestService", dims["Service"])
+		assert.Equal(t, "GET", dims["Method"])
+		assert.Equal(t, "api.example.com", dims["Host"])
+		assert.Equal(t, route, dims["Route"])
+
+		switch ts {
+		case minute1:
+			switch *datum.MetricName {
+			case metricNameResponseTime:
+				minute1Response = &datum
+			case metricNameRequestCount:
+				minute1RequestCount = &datum
+			case metricNameFailedRequestCount:
+				minute1FailedCount = &datum
+			default:
+				t.Fatalf("unexpected metric name for minute1: %s", *datum.MetricName)
+			}
+		case minute2:
+			switch *datum.MetricName {
+			case metricNameResponseTime:
+				minute2Response = &datum
+			case metricNameRequestCount:
+				minute2RequestCount = &datum
+			case metricNameFailedRequestCount:
+				minute2FailedCount = &datum
+			default:
+				t.Fatalf("unexpected metric name for minute2: %s", *datum.MetricName)
+			}
+		default:
+			t.Fatalf("unexpected timestamp: %s", ts)
+		}
 	}
+
+	require.NotNil(t, minute1Response)
+	require.NotNil(t, minute1RequestCount)
+	require.NotNil(t, minute1FailedCount)
+	require.NotNil(t, minute2Response)
+	require.NotNil(t, minute2RequestCount)
+	require.NotNil(t, minute2FailedCount)
+
+	assert.Equal(t, types.StandardUnitSeconds, minute1Response.Unit)
+	assert.ElementsMatch(t, []float64{0.5, 0.75}, minute1Response.Values)
+	assert.Equal(t, []float64{1, 1}, minute1Response.Counts)
+	assert.Equal(t, minute1, minute1Response.Timestamp.UTC())
+
+	assert.Equal(t, types.StandardUnitCount, minute1RequestCount.Unit)
+	assert.Equal(t, float64(1), *minute1RequestCount.Value)
+	assert.Equal(t, minute1, minute1RequestCount.Timestamp.UTC())
+
+	assert.Equal(t, types.StandardUnitCount, minute1FailedCount.Unit)
+	assert.Equal(t, float64(1), *minute1FailedCount.Value)
+	assert.Equal(t, minute1, minute1FailedCount.Timestamp.UTC())
+
+	assert.Equal(t, types.StandardUnitSeconds, minute2Response.Unit)
+	assert.ElementsMatch(t, []float64{0.6}, minute2Response.Values)
+	assert.Equal(t, []float64{1}, minute2Response.Counts)
+	assert.Equal(t, minute2, minute2Response.Timestamp.UTC())
+
+	assert.Equal(t, types.StandardUnitCount, minute2RequestCount.Unit)
+	assert.Equal(t, float64(1), *minute2RequestCount.Value)
+	assert.Equal(t, minute2, minute2RequestCount.Timestamp.UTC())
+
+	assert.Equal(t, types.StandardUnitCount, minute2FailedCount.Unit)
+	assert.Equal(t, float64(0), *minute2FailedCount.Value)
+	assert.Equal(t, minute2, minute2FailedCount.Timestamp.UTC())
 }
 
 func TestMetricAggregator_GetCloudWatchMetricData_EmptyMetrics(t *testing.T) {

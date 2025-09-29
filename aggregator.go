@@ -17,13 +17,13 @@ type metricKey struct {
 	Method string
 	Host   string
 	Route  string
+	Minute time.Time
 }
 
 type metricAggregate struct {
-	durations      []float64
-	successCount   int
-	failedCount    int
-	latestRecorded time.Time
+	durations    []float64
+	successCount int
+	failedCount  int
 }
 
 // MetricAggregator maintains per method/host/route aggregates convertible to CloudWatch MetricDatum values.
@@ -48,7 +48,8 @@ func (m *MetricAggregator) Record(entry albLogEntry, route string) {
 		return
 	}
 
-	key := metricKey{Method: entry.method, Host: entry.host, Route: route}
+	minute := entry.timestamp.UTC().Truncate(time.Minute)
+	key := metricKey{Method: entry.method, Host: entry.host, Route: route, Minute: minute}
 	agg, ok := m.metrics[key]
 	if !ok {
 		agg = &metricAggregate{}
@@ -60,9 +61,6 @@ func (m *MetricAggregator) Record(entry albLogEntry, route string) {
 		agg.failedCount++
 	} else {
 		agg.successCount++
-	}
-	if entry.timestamp.After(agg.latestRecorded) {
-		agg.latestRecorded = entry.timestamp
 	}
 }
 
@@ -76,10 +74,7 @@ func (m *MetricAggregator) GetCloudWatchMetricData() []types.MetricDatum {
 			continue
 		}
 
-		timestamp := agg.latestRecorded
-		if timestamp.IsZero() {
-			timestamp = time.Now().UTC()
-		}
+		timestamp := key.Minute
 
 		dimensions := []types.Dimension{
 			{Name: aws.String("Service"), Value: aws.String(m.service)},

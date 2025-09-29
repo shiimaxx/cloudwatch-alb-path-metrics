@@ -4,18 +4,15 @@ import (
 	"bufio"
 	"compress/gzip"
 	"context"
-	"encoding/json"
 	"fmt"
 	"net/url"
 	"os"
 	"strings"
-	"time"
 
 	"github.com/aws/aws-lambda-go/events"
 	"github.com/aws/aws-lambda-go/lambda"
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
-	"github.com/aws/aws-sdk-go-v2/service/cloudwatch/types"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 )
 
@@ -65,17 +62,26 @@ func handler(ctx context.Context, s3Event events.S3Event) error {
 		return nil
 	}
 
-	output := metricsEnvelope{
-		Namespace:  namespace,
-		MetricData: convertMetricData(metricData),
-	}
+	for _, data := range metricData {
+		if *data.MetricName == metricNameResponseTime {
+			fmt.Printf("Metric: %s, Dimensions: %v, Timestamp: %v, Values: %v, Counts: %v\n",
+				aws.ToString(data.MetricName),
+				data.Dimensions,
+				data.Timestamp,
+				data.Values,
+				data.Counts,
+			)
+		}
 
-	encoded, err := json.Marshal(output)
-	if err != nil {
-		return fmt.Errorf("marshal metric output: %w", err)
+		if *data.MetricName == metricNameRequestCount || *data.MetricName == metricNameFailedRequestCount {
+			fmt.Printf("Metric: %s, Dimensions: %v, Timestamp: %v, Value: %v\n",
+				aws.ToString(data.MetricName),
+				data.Dimensions,
+				data.Timestamp,
+				aws.ToFloat64(data.Value),
+			)
+		}
 	}
-
-	fmt.Println(string(encoded))
 
 	return nil
 }
@@ -114,73 +120,4 @@ func streamObjectLines(ctx context.Context, client *s3.Client, bucket, key strin
 
 func main() {
 	lambda.Start(handler)
-}
-
-type metricsEnvelope struct {
-	Namespace  string              `json:"namespace"`
-	MetricData []metricDatumOutput `json:"metric_data"`
-}
-
-type metricDatumOutput struct {
-	MetricName string            `json:"metric_name"`
-	Timestamp  time.Time         `json:"timestamp"`
-	Dimensions []dimensionOutput `json:"dimensions"`
-	Unit       string            `json:"unit"`
-	Value      *float64          `json:"value,omitempty"`
-	Values     []float64         `json:"values,omitempty"`
-	Counts     []float64         `json:"counts,omitempty"`
-}
-
-type dimensionOutput struct {
-	Name  string `json:"name"`
-	Value string `json:"value"`
-}
-
-func convertMetricData(metricData []types.MetricDatum) []metricDatumOutput {
-	outputs := make([]metricDatumOutput, 0, len(metricData))
-	for _, datum := range metricData {
-		outputs = append(outputs, metricDatumOutput{
-			MetricName: derefString(datum.MetricName),
-			Timestamp:  derefTime(datum.Timestamp),
-			Dimensions: convertDimensions(datum.Dimensions),
-			Unit:       string(datum.Unit),
-			Value:      copyFloatPointer(datum.Value),
-			Values:     append([]float64(nil), datum.Values...),
-			Counts:     append([]float64(nil), datum.Counts...),
-		})
-	}
-	return outputs
-}
-
-func convertDimensions(dimensions []types.Dimension) []dimensionOutput {
-	if len(dimensions) == 0 {
-		return nil
-	}
-	result := make([]dimensionOutput, len(dimensions))
-	for i, dim := range dimensions {
-		result[i] = dimensionOutput{Name: derefString(dim.Name), Value: derefString(dim.Value)}
-	}
-	return result
-}
-
-func derefString(value *string) string {
-	if value == nil {
-		return ""
-	}
-	return *value
-}
-
-func derefTime(value *time.Time) time.Time {
-	if value == nil {
-		return time.Time{}
-	}
-	return *value
-}
-
-func copyFloatPointer(value *float64) *float64 {
-	if value == nil {
-		return nil
-	}
-	copyValue := *value
-	return &copyValue
 }
