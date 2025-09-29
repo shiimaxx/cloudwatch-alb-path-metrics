@@ -13,6 +13,7 @@ import (
 	"github.com/aws/aws-lambda-go/lambda"
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/service/cloudwatch"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 )
 
@@ -23,6 +24,7 @@ func handler(ctx context.Context, s3Event events.S3Event) error {
 	}
 
 	s3Client := s3.NewFromConfig(cfg)
+	cwClient := cloudwatch.NewFromConfig(cfg)
 
 	namespace := strings.TrimSpace(os.Getenv("NAMESPACE"))
 	if namespace == "" {
@@ -40,6 +42,7 @@ func handler(ctx context.Context, s3Event events.S3Event) error {
 	}
 
 	aggregator := NewMetricAggregator(namespace, service)
+	publisher := NewCloudWatchMetricPublisher(cwClient, namespace)
 
 	for _, record := range s3Event.Records {
 		bucket := record.S3.Bucket.Name
@@ -60,6 +63,10 @@ func handler(ctx context.Context, s3Event events.S3Event) error {
 	metricData := aggregator.GetCloudWatchMetricData()
 	if len(metricData) == 0 {
 		return nil
+	}
+
+	if err := publisher.Publish(ctx, metricData); err != nil {
+		return fmt.Errorf("publish metrics: %w", err)
 	}
 
 	for _, data := range metricData {
