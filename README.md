@@ -62,3 +62,16 @@ Log entries that do not match any rule are ignored to prevent Route dimension ca
 | `Method` | HTTP method extracted from the ALB log entry | `GET` |
 | `Host` | Request host used to route traffic | `api.example.com` |
 | `Route` | Normalized logical path name after applying `INCLUDE_PATH_RULES` | `UsersById` |
+
+## Development
+
+To build and run the project locally using Docker, use the following commands:
+```
+docker build --tag cloudwatch-alb-path-metrics .
+docker run --rm -p 9000:8080 cloudwatch-alb-path-metrics
+```
+
+Invoke the function with a test event:
+```
+BUCKET=my-alb-logs-bucket KEY=path/to/logfile.log script/invoke.sh
+```
