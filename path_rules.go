@@ -78,3 +78,22 @@ func newPathRules(raw string) (*pathRules, error) {
 		rules:   compiled,
 	}, nil
 }
+
+// normalize returns the normalized route for the provided entry if any rule matches.
+func (pr *pathRules) normalize(entry albLogEntry) (string, bool) {
+	if pr == nil || !pr.enabled {
+		return "", false
+	}
+
+	for _, rule := range pr.rules {
+		if entry.host != rule.host {
+			continue
+		}
+
+		if rule.regex.MatchString(entry.path) {
+			return rule.route, true
+		}
+	}
+
+	return "", false
+}

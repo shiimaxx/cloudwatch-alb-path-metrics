@@ -81,3 +81,42 @@ func TestNewPathRules_InvalidRegex(t *testing.T) {
 	_, err := newPathRules(`[{"host":"example.com","path":"^/users/[","route":"/users/:id"}]`)
 	assert.Error(t, err)
 }
+
+func TestPathRulesNormalize_Match(t *testing.T) {
+	raw := `[{"host":"example.com","path":"^/users/[0-9]+$","route":"/users/:id"}]`
+
+	rules, err := newPathRules(raw)
+	require.NoError(t, err)
+
+	entry := albLogEntry{host: "example.com", path: "/users/42"}
+
+	route, matched := rules.normalize(entry)
+
+	assert.True(t, matched)
+	assert.Equal(t, "/users/:id", route)
+}
+
+func TestPathRulesNormalize_NoMatch(t *testing.T) {
+	raw := `[{"host":"example.com","path":"^/users/[0-9]+$","route":"/users/:id"}]`
+
+	rules, err := newPathRules(raw)
+	require.NoError(t, err)
+
+	entry := albLogEntry{host: "api.example.com", path: "/users/abc"}
+
+	route, matched := rules.normalize(entry)
+
+	assert.False(t, matched)
+	assert.Empty(t, route)
+}
+
+func TestPathRulesNormalize_Disabled(t *testing.T) {
+	rules := &pathRules{}
+
+	entry := albLogEntry{host: "example.com", path: "/users/42"}
+
+	route, matched := rules.normalize(entry)
+
+	assert.False(t, matched)
+	assert.Empty(t, route)
+}

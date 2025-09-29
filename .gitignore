@@ -3,3 +3,4 @@ dist/*
 testdata/*.log.gz
 testdata/*.log
 .claude/settings.local.json
+out

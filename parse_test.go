@@ -69,3 +69,16 @@ func TestParseALBLogFields(t *testing.T) {
 		})
 	}
 }
+
+func TestParseALBLogLine(t *testing.T) {
+	line := `http 2024-01-15T10:00:00.000000Z app/my-loadbalancer/50dc6c495c0c9188 192.168.1.100:57832 10.0.1.1:80 0.000 0.001 0.000 200 200 218 587 "GET http://api.example.com/users/123 HTTP/1.1" "Mozilla/5.0 (Windows NT 10.0; Win64; x64)" - - arn:aws:elasticloadbalancing:us-east-1:123456789012:targetgroup/my-targets/73e2d6bc24d8a067 Root=1-65a5b7e0-4f2d8c9a7b1e3f4a5b6c7d8e api.example.com arn:aws:acm:us-east-1:123456789012:certificate/12345678-1234-1234-1234-123456789012 0 2024-01-15T10:00:00.000000Z forward - - - - - - -`
+
+	entry, err := parseALBLogLine(line)
+	assert.NoError(t, err)
+
+	assert.Equal(t, "GET", entry.method)
+	assert.Equal(t, "api.example.com", entry.host)
+	assert.Equal(t, "/users/123", entry.path)
+	assert.Equal(t, 200, entry.status)
+	assert.InEpsilon(t, 0.001, entry.duration, 1e-9)
+}

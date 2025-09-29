@@ -34,6 +34,10 @@ const (
 )
 
 func parseALBLogFields(fields []string) (*albLogEntry, error) {
+	if len(fields) <= requestFieldIndex {
+		return nil, errors.New("invalid ALB log entry: missing required fields")
+	}
+
 	// Parse timestamp (ISO 8601 format: 2018-07-02T22:23:00.186641Z)
 	timestamp, err := time.Parse(time.RFC3339Nano, fields[timestampFieldIndex])
 	if err != nil {
@@ -66,7 +70,7 @@ func parseALBLogFields(fields []string) (*albLogEntry, error) {
 	return &albLogEntry{
 		timestamp: timestamp,
 		method:    method,
-		host:      u.Host,
+		host:      u.Hostname(),
 		path:      u.Path,
 		status:    status,
 		duration:  duration,
@@ -98,4 +102,17 @@ func parseALBLogFile(logContent string) ([]*albLogEntry, error) {
 	}
 
 	return entries, nil
+}
+
+func parseALBLogLine(line string) (*albLogEntry, error) {
+	reader := csv.NewReader(strings.NewReader(line))
+	reader.Comma = ' '
+	reader.ReuseRecord = true
+
+	fields, err := reader.Read()
+	if err != nil {
+		return nil, errors.New("failed to parse ALB log line: " + err.Error())
+	}
+
+	return parseALBLogFields(fields)
 }

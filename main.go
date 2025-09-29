@@ -6,6 +6,7 @@ import (
 	"context"
 	"fmt"
 	"net/url"
+	"os"
 
 	"github.com/aws/aws-lambda-go/events"
 	"github.com/aws/aws-lambda-go/lambda"
@@ -22,6 +23,11 @@ func handler(ctx context.Context, s3Event events.S3Event) error {
 
 	s3Client := s3.NewFromConfig(cfg)
 
+	rules, err := newPathRules(os.Getenv("INCLUDE_PATH_RULES"))
+	if err != nil {
+		return fmt.Errorf("parse path rules: %w", err)
+	}
+
 	for _, record := range s3Event.Records {
 		bucket := record.S3.Bucket.Name
 		if bucket == "" {
@@ -33,7 +39,7 @@ func handler(ctx context.Context, s3Event events.S3Event) error {
 			return fmt.Errorf("decode object key %q: %w", record.S3.Object.Key, err)
 		}
 
-		if err := streamObjectLines(ctx, s3Client, bucket, key); err != nil {
+		if err := streamObjectLines(ctx, s3Client, bucket, key, rules); err != nil {
 			return fmt.Errorf("stream s3://%s/%s: %w", bucket, key, err)
 		}
 	}
@@ -41,7 +47,7 @@ func handler(ctx context.Context, s3Event events.S3Event) error {
 	return nil
 }
 
-func streamObjectLines(ctx context.Context, client *s3.Client, bucket, key string) error {
+func streamObjectLines(ctx context.Context, client *s3.Client, bucket, key string, rules *pathRules) error {
 	resp, err := client.GetObject(ctx, &s3.GetObjectInput{Bucket: aws.String(bucket), Key: aws.String(key)})
 	if err != nil {
 		return fmt.Errorf("get object: %w", err)
@@ -56,7 +62,10 @@ func streamObjectLines(ctx context.Context, client *s3.Client, bucket, key strin
 
 	scanner := bufio.NewScanner(gzipReader)
 	for scanner.Scan() {
-		fmt.Println(scanner.Text())
+		line := scanner.Text()
+		if shouldPrintLogLine(line, rules) {
+			fmt.Println(line)
+		}
 	}
 
 	if err := scanner.Err(); err != nil {
