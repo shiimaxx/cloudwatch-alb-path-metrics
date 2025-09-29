@@ -13,5 +13,7 @@ aws lambda update-function-configuration \
   --function-name cloudwatch-alb-path-metrics \
   --environment Variables="
 {
+  NAMESPACE=\"shiimaxx\",
+  SERVICE=\"hello\",
   INCLUDE_PATH_RULES=\"${INCLUDE_PATH_RULES}\",
 }"

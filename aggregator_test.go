@@ -9,17 +9,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestMetricKey_String(t *testing.T) {
-	key := MetricKey{
-		Method: "GET",
-		Host:   "example.com",
-		Path:   "/api/users",
-	}
-
-	want := "GET\texample.com\t/api/users"
-	assert.Equal(t, want, key.String())
-}
-
 func TestNewMetricAggregator(t *testing.T) {
 	namespace := "TestNamespace"
 	service := "TestService"
@@ -33,118 +22,76 @@ func TestNewMetricAggregator(t *testing.T) {
 	assert.Empty(t, aggregator.metrics)
 }
 
-func TestMetricAggregator_AddDuration(t *testing.T) {
+func TestMetricAggregator_RecordAggregatesMetrics(t *testing.T) {
 	aggregator := NewMetricAggregator("TestNamespace", "TestService")
 
-	key1 := MetricKey{Method: "GET", Host: "example.com", Path: "/api/users"}
-	key2 := MetricKey{Method: "POST", Host: "example.com", Path: "/api/users"}
+	route := "/users/:id"
+	time1 := time.Date(2024, 1, 1, 12, 0, 0, 0, time.UTC)
+	time2 := time.Date(2024, 1, 1, 12, 5, 0, 0, time.UTC)
 
-	timestamp1 := time.Date(2023, 1, 1, 12, 0, 0, 0, time.UTC)
-	timestamp2 := time.Date(2023, 1, 1, 12, 1, 0, 0, time.UTC)
-	timestamp3 := time.Date(2023, 1, 1, 12, 2, 0, 0, time.UTC)
+	aggregator.Record(albLogEntry{method: "GET", host: "example.com", status: 200, duration: 0.12, timestamp: time1}, route)
+	aggregator.Record(albLogEntry{method: "GET", host: "example.com", status: 502, duration: 0.34, timestamp: time2}, route)
 
-	aggregator.AddDuration(key1, 0.1, timestamp1)
-	aggregator.AddDuration(key1, 0.2, timestamp2)
-	aggregator.AddDuration(key2, 0.3, timestamp3)
+	require.Len(t, aggregator.metrics, 1)
 
-	assert.Len(t, aggregator.metrics, 2)
-	assert.Contains(t, aggregator.metrics, key1.String())
-	assert.Contains(t, aggregator.metrics, key2.String())
-
-	metricValues1 := aggregator.metrics[key1.String()]
-	assert.Len(t, metricValues1, 2)
-	assert.Equal(t, 0.1, metricValues1[0].Duration)
-	assert.Equal(t, timestamp1, metricValues1[0].Timestamp)
-	assert.Equal(t, 0.2, metricValues1[1].Duration)
-	assert.Equal(t, timestamp2, metricValues1[1].Timestamp)
-
-	metricValues2 := aggregator.metrics[key2.String()]
-	assert.Len(t, metricValues2, 1)
-	assert.Equal(t, 0.3, metricValues2[0].Duration)
-	assert.Equal(t, timestamp3, metricValues2[0].Timestamp)
+	key := metricKey{Method: "GET", Host: "example.com", Route: route}
+	agg, ok := aggregator.metrics[key]
+	require.True(t, ok)
+	assert.Equal(t, 1, agg.successCount)
+	assert.Equal(t, 1, agg.failedCount)
+	assert.Equal(t, []float64{0.12, 0.34}, agg.durations)
+	assert.Equal(t, time2, agg.latestRecorded)
 }
 
 func TestMetricAggregator_GetCloudWatchMetricData(t *testing.T) {
 	aggregator := NewMetricAggregator("TestNamespace", "TestService")
 
-	key := MetricKey{Method: "GET", Host: "example.com", Path: "/api/users"}
-	timestamp1 := time.Date(2023, 1, 1, 12, 0, 0, 0, time.UTC)
-	timestamp2 := time.Date(2023, 1, 1, 12, 1, 0, 0, time.UTC)
-	timestamp3 := time.Date(2023, 1, 1, 12, 2, 0, 0, time.UTC)
+	route := "/check"
+	time1 := time.Date(2024, 2, 1, 8, 0, 0, 0, time.UTC)
+	time2 := time.Date(2024, 2, 1, 8, 1, 0, 0, time.UTC)
 
-	aggregator.AddDuration(key, 0.1, timestamp1)
-	aggregator.AddDuration(key, 0.2, timestamp2)
-	aggregator.AddDuration(key, 0.3, timestamp3)
+	aggregator.Record(albLogEntry{method: "GET", host: "api.example.com", status: 200, duration: 0.5, timestamp: time1}, route)
+	aggregator.Record(albLogEntry{method: "GET", host: "api.example.com", status: 504, duration: 0.75, timestamp: time2}, route)
 
 	metricData := aggregator.GetCloudWatchMetricData()
+	require.Len(t, metricData, 3)
 
-	require.Len(t, metricData, 1)
-
-	metric := metricData[0]
-
-	assert.Equal(t, metricNameDuration, *metric.MetricName)
-	assert.Equal(t, types.StandardUnitSeconds, metric.Unit)
-	require.Len(t, metric.Dimensions, 4)
-
-	dimensionsMap := make(map[string]string)
-	for _, dim := range metric.Dimensions {
-		dimensionsMap[*dim.Name] = *dim.Value
+	metricsByName := make(map[string]types.MetricDatum)
+	for _, datum := range metricData {
+		metricsByName[*datum.MetricName] = datum
 	}
 
-	assert.Equal(t, "TestService", dimensionsMap["Service"])
-	assert.Equal(t, "GET", dimensionsMap["Method"])
-	assert.Equal(t, "example.com", dimensionsMap["Host"])
-	assert.Equal(t, "/api/users", dimensionsMap["Path"])
+	require.Contains(t, metricsByName, metricNameResponseTime)
+	require.Contains(t, metricsByName, metricNameRequestCount)
+	require.Contains(t, metricsByName, metricNameFailedRequestCount)
 
-	require.Len(t, metric.Values, 3)
-	require.Len(t, metric.Counts, 3)
+	response := metricsByName[metricNameResponseTime]
+	assert.Equal(t, types.StandardUnitSeconds, response.Unit)
+	assert.ElementsMatch(t, []float64{0.5, 0.75}, response.Values)
+	assert.Equal(t, []float64{1, 1}, response.Counts)
+	assert.Equal(t, time2, *response.Timestamp)
 
-	assert.Contains(t, metric.Values, 0.1)
-	assert.Contains(t, metric.Values, 0.2)
-	assert.Contains(t, metric.Values, 0.3)
+	requestCount := metricsByName[metricNameRequestCount]
+	assert.Equal(t, types.StandardUnitCount, requestCount.Unit)
+	assert.Equal(t, float64(1), *requestCount.Value)
+	assert.Equal(t, time2, *requestCount.Timestamp)
 
-	// All counts should be 1.0
-	for _, count := range metric.Counts {
-		assert.Equal(t, 1.0, count)
-	}
-}
+	failedCount := metricsByName[metricNameFailedRequestCount]
+	assert.Equal(t, types.StandardUnitCount, failedCount.Unit)
+	assert.Equal(t, float64(1), *failedCount.Value)
+	assert.Equal(t, time2, *failedCount.Timestamp)
 
-func TestMetricAggregator_GetCloudWatchMetricData_MultipleKeys(t *testing.T) {
-	aggregator := NewMetricAggregator("TestNamespace", "TestService")
-
-	key1 := MetricKey{Method: "GET", Host: "example.com", Path: "/api/users"}
-	key2 := MetricKey{Method: "POST", Host: "example.com", Path: "/api/orders"}
-
-	timestamp1 := time.Date(2023, 1, 1, 12, 0, 0, 0, time.UTC)
-	timestamp2 := time.Date(2023, 1, 1, 12, 1, 0, 0, time.UTC)
-	timestamp3 := time.Date(2023, 1, 1, 12, 2, 0, 0, time.UTC)
-
-	aggregator.AddDuration(key1, 0.1, timestamp1)
-	aggregator.AddDuration(key1, 0.2, timestamp2)
-	aggregator.AddDuration(key2, 0.3, timestamp3)
-
-	metricData := aggregator.GetCloudWatchMetricData()
-
-	require.Len(t, metricData, 2)
-
-	// Check that we have metrics for both keys
-	metricsByPath := make(map[string]types.MetricDatum)
-	for _, metric := range metricData {
-		for _, dim := range metric.Dimensions {
-			if *dim.Name == "Path" {
-				metricsByPath[*dim.Value] = metric
-			}
+	for _, datum := range metricData {
+		dimensions := make(map[string]string)
+		for _, dim := range datum.Dimensions {
+			dimensions[*dim.Name] = *dim.Value
 		}
+
+		assert.Equal(t, "TestService", dimensions["Service"])
+		assert.Equal(t, "GET", dimensions["Method"])
+		assert.Equal(t, "api.example.com", dimensions["Host"])
+		assert.Equal(t, route, dimensions["Route"])
 	}
-
-	require.Contains(t, metricsByPath, "/api/users")
-	require.Contains(t, metricsByPath, "/api/orders")
-
-	usersMetric := metricsByPath["/api/users"]
-	assert.Len(t, usersMetric.Values, 2)
-
-	ordersMetric := metricsByPath["/api/orders"]
-	assert.Len(t, ordersMetric.Values, 1)
 }
 
 func TestMetricAggregator_GetCloudWatchMetricData_EmptyMetrics(t *testing.T) {
@@ -153,49 +100,4 @@ func TestMetricAggregator_GetCloudWatchMetricData_EmptyMetrics(t *testing.T) {
 	metricData := aggregator.GetCloudWatchMetricData()
 
 	assert.Empty(t, metricData)
-}
-
-func TestParseMetricKey(t *testing.T) {
-	tests := []struct {
-		name     string
-		keyStr   string
-		expected MetricKey
-		hasError bool
-	}{
-		{
-			name:   "valid key",
-			keyStr: "GET\texample.com\t/api/users",
-			expected: MetricKey{
-				Method: "GET",
-				Host:   "example.com",
-				Path:   "/api/users",
-			},
-			hasError: false,
-		},
-		{
-			name:     "too few parts",
-			keyStr:   "GET\texample.com",
-			expected: MetricKey{},
-			hasError: true,
-		},
-		{
-			name:     "empty key",
-			keyStr:   "",
-			expected: MetricKey{},
-			hasError: true,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result, err := parseMetricKey(tt.keyStr)
-
-			if tt.hasError {
-				assert.Error(t, err)
-			} else {
-				assert.NoError(t, err)
-				assert.Equal(t, tt.expected, result)
-			}
-		})
-	}
 }

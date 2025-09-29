@@ -68,7 +68,7 @@ Log entries that do not match any rule are ignored to prevent Route dimension ca
 
 To build and run the project locally using Docker, use the following commands:
 ```
-script/run.sh
+INCLUDE_PATH_RULES='[{\"host\":\"example.com\",\"method\":\"GET\",\"path\":\"^/users/[0-9]+$\",\"route\":\"/users/:id\"}]' script/deploy.sh
 ```
 
 Invoke the function with a test event:

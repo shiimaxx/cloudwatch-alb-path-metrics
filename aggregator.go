@@ -1,8 +1,6 @@
 package main
 
 import (
-	"fmt"
-	"strings"
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -10,122 +8,126 @@ import (
 )
 
 const (
-	metricNameDuration = "Duration"
-	delimiter          = "\t" // Tab character - safe delimiter that won't appear in URLs
+	metricNameResponseTime       = "ResponseTime"
+	metricNameRequestCount       = "RequestCount"
+	metricNameFailedRequestCount = "FailedRequestCount"
 )
 
-// MetricKey represents the key for aggregating metrics
-type MetricKey struct {
+type metricKey struct {
 	Method string
 	Host   string
-	Path   string
+	Route  string
 }
 
-// String returns a string representation of the MetricKey for use as a map key
-func (k MetricKey) String() string {
-	return fmt.Sprintf("%s%s%s%s%s", k.Method, delimiter, k.Host, delimiter, k.Path)
+type metricAggregate struct {
+	durations      []float64
+	successCount   int
+	failedCount    int
+	latestRecorded time.Time
 }
 
-// MetricValue represents a single metric data point with timestamp
-type MetricValue struct {
-	Duration  float64
-	Timestamp time.Time
-}
-
-// MetricAggregator aggregates duration metrics by Method, Host, and Path
+// MetricAggregator maintains per method/host/route aggregates convertible to CloudWatch MetricDatum values.
 type MetricAggregator struct {
-	metrics   map[string][]MetricValue
+	metrics   map[metricKey]*metricAggregate
 	namespace string
 	service   string
 }
 
-// NewMetricAggregator creates a new MetricAggregator instance
+// NewMetricAggregator creates a new MetricAggregator instance.
 func NewMetricAggregator(namespace, service string) *MetricAggregator {
 	return &MetricAggregator{
-		metrics:   make(map[string][]MetricValue),
+		metrics:   make(map[metricKey]*metricAggregate),
 		namespace: namespace,
 		service:   service,
 	}
 }
 
-// AddDuration adds a duration value with timestamp for the given metric key
-func (m *MetricAggregator) AddDuration(key MetricKey, duration float64, timestamp time.Time) {
-	keyStr := key.String()
-	m.metrics[keyStr] = append(m.metrics[keyStr], MetricValue{
-		Duration:  duration,
-		Timestamp: timestamp,
-	})
+// Record adds a single request observation to the aggregate identified by the normalized route.
+func (m *MetricAggregator) Record(entry albLogEntry, route string) {
+	if route == "" {
+		return
+	}
+
+	key := metricKey{Method: entry.method, Host: entry.host, Route: route}
+	agg, ok := m.metrics[key]
+	if !ok {
+		agg = &metricAggregate{}
+		m.metrics[key] = agg
+	}
+
+	agg.durations = append(agg.durations, entry.duration)
+	if entry.status >= 500 && entry.status <= 599 {
+		agg.failedCount++
+	} else {
+		agg.successCount++
+	}
+	if entry.timestamp.After(agg.latestRecorded) {
+		agg.latestRecorded = entry.timestamp
+	}
 }
 
-// GetCloudWatchMetricData returns CloudWatch MetricDatum for all aggregated metrics
+// GetCloudWatchMetricData materializes the aggregates as CloudWatch metric data points.
 func (m *MetricAggregator) GetCloudWatchMetricData() []types.MetricDatum {
 	var metricData []types.MetricDatum
 
-	for keyStr, metricValues := range m.metrics {
-		// Parse the key back to get Method, Host, Path
-		key, err := parseMetricKey(keyStr)
-		if err != nil {
-			// Skip invalid keys
+	for key, agg := range m.metrics {
+		totalRequests := agg.successCount + agg.failedCount
+		if totalRequests == 0 {
 			continue
 		}
 
-		// Create dimensions
+		timestamp := agg.latestRecorded
+		if timestamp.IsZero() {
+			timestamp = time.Now().UTC()
+		}
+
 		dimensions := []types.Dimension{
-			{
-				Name:  aws.String("Service"),
-				Value: aws.String(m.service),
-			},
-			{
-				Name:  aws.String("Method"),
-				Value: aws.String(key.Method),
-			},
-			{
-				Name:  aws.String("Host"),
-				Value: aws.String(key.Host),
-			},
-			{
-				Name:  aws.String("Path"),
-				Value: aws.String(key.Path),
-			},
+			{Name: aws.String("Service"), Value: aws.String(m.service)},
+			{Name: aws.String("Method"), Value: aws.String(key.Method)},
+			{Name: aws.String("Host"), Value: aws.String(key.Host)},
+			{Name: aws.String("Route"), Value: aws.String(key.Route)},
 		}
 
-		// Create MetricDatum with Values and Counts for efficient API usage
-		// Note: CloudWatch MetricDatum only supports single timestamp per datum,
-		// so we use Values/Counts arrays and let CloudWatch handle timestamp
-		unit := types.StandardUnitSeconds
+		if len(agg.durations) > 0 {
+			values := make([]float64, len(agg.durations))
+			counts := make([]float64, len(agg.durations))
+			copy(values, agg.durations)
+			for i := range counts {
+				counts[i] = 1.0
+			}
 
-		// Convert metric values to CloudWatch format
-		values := make([]float64, len(metricValues))
-		counts := make([]float64, len(metricValues))
-		for i, mv := range metricValues {
-			values[i] = mv.Duration
-			counts[i] = 1.0 // Each duration represents 1 request
+			metricData = append(metricData, types.MetricDatum{
+				MetricName: aws.String(metricNameResponseTime),
+				Timestamp:  aws.Time(timestamp),
+				Dimensions: cloneDimensions(dimensions),
+				Values:     values,
+				Counts:     counts,
+				Unit:       types.StandardUnitSeconds,
+			})
 		}
 
-		metricDatum := types.MetricDatum{
-			MetricName: aws.String(metricNameDuration),
-			Dimensions: dimensions,
-			Values:     values,
-			Counts:     counts,
-			Unit:       unit,
-		}
+		metricData = append(metricData, types.MetricDatum{
+			MetricName: aws.String(metricNameRequestCount),
+			Timestamp:  aws.Time(timestamp),
+			Dimensions: cloneDimensions(dimensions),
+			Value:      aws.Float64(float64(agg.successCount)),
+			Unit:       types.StandardUnitCount,
+		})
 
-		metricData = append(metricData, metricDatum)
+		metricData = append(metricData, types.MetricDatum{
+			MetricName: aws.String(metricNameFailedRequestCount),
+			Timestamp:  aws.Time(timestamp),
+			Dimensions: cloneDimensions(dimensions),
+			Value:      aws.Float64(float64(agg.failedCount)),
+			Unit:       types.StandardUnitCount,
+		})
 	}
 
 	return metricData
 }
 
-// parseMetricKey parses a string key back into MetricKey
-func parseMetricKey(keyStr string) (MetricKey, error) {
-	parts := strings.SplitN(keyStr, delimiter, 3)
-	if len(parts) != 3 {
-		return MetricKey{}, fmt.Errorf("invalid key format: %s", keyStr)
-	}
-
-	return MetricKey{
-		Method: parts[0],
-		Host:   parts[1],
-		Path:   parts[2],
-	}, nil
+func cloneDimensions(source []types.Dimension) []types.Dimension {
+	clone := make([]types.Dimension, len(source))
+	copy(clone, source)
+	return clone
 }
