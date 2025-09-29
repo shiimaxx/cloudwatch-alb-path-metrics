@@ -9,7 +9,7 @@ import (
 )
 
 func TestPathRuleConfig_Unmarshal(t *testing.T) {
-	payload := "{\"host\":\"example.com\",\"path\":\"^/users/[0-9]+$\",\"route\":\"/users/:id\"}"
+	payload := `{"host":"example.com","path":"^/users/[0-9]+$","route":"/users/:id"}`
 
 	var rule pathRuleConfig
 	err := json.Unmarshal([]byte(payload), &rule)
@@ -64,18 +64,9 @@ func TestNewPathRules_MissingFields(t *testing.T) {
 		name string
 		json string
 	}{
-		{
-			name: "missing host",
-			json: `[{"path":"^/users/[0-9]+$","route":"/users/:id"}]`,
-		},
-		{
-			name: "missing path",
-			json: `[{"host":"example.com","route":"/users/:id"}]`,
-		},
-		{
-			name: "missing route",
-			json: `[{"host":"example.com","path":"^/users/[0-9]+$"}]`,
-		},
+		{name: "missing host", json: `[{"path":"^/users/[0-9]+$","route":"/users/:id"}]`},
+		{name: "missing path", json: `[{"host":"example.com","route":"/users/:id"}]`},
+		{name: "missing route", json: `[{"host":"example.com","path":"^/users/[0-9]+$"}]`},
 	}
 
 	for _, tt := range tests {
