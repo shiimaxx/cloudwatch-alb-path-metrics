@@ -3,7 +3,6 @@ package main
 import (
 	"encoding/csv"
 	"errors"
-	"io"
 	"net/url"
 	"strconv"
 	"strings"
@@ -75,33 +74,6 @@ func parseALBLogFields(fields []string) (*albLogEntry, error) {
 		status:    status,
 		duration:  duration,
 	}, nil
-}
-
-func parseALBLogFile(logContent string) ([]*albLogEntry, error) {
-	reader := csv.NewReader(strings.NewReader(logContent))
-	reader.Comma = ' '
-	reader.ReuseRecord = true
-
-	var entries []*albLogEntry
-
-	for {
-		fields, err := reader.Read()
-		if err == io.EOF {
-			break
-		}
-		if err != nil {
-			return nil, errors.New("failed to parse ALB log file: " + err.Error())
-		}
-
-		entry, err := parseALBLogFields(fields)
-		if err != nil {
-			// Skip invalid lines instead of failing the entire parse
-			continue
-		}
-		entries = append(entries, entry)
-	}
-
-	return entries, nil
 }
 
 func parseALBLogLine(line string) (*albLogEntry, error) {
