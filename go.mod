@@ -9,7 +9,6 @@ require (
 	github.com/aws/aws-sdk-go-v2/config v1.31.10
 	github.com/aws/aws-sdk-go-v2/service/cloudwatch v1.50.1
 	github.com/aws/aws-sdk-go-v2/service/s3 v1.88.2
-	github.com/expr-lang/expr v1.17.6
 	github.com/stretchr/testify v1.7.2
 )
 
