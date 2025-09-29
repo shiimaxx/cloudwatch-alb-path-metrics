@@ -32,7 +32,7 @@ func TestParseALBLogFields(t *testing.T) {
 		{
 			name:   "basic GET request",
 			fields: parseLogEntry(t, getLogEntry),
-			want:   albLogEntry{
+			want: albLogEntry{
 				timestamp: time.Date(2024, 1, 15, 10, 0, 0, 0, time.UTC),
 				method:    "GET",
 				host:      "api.example.com",
@@ -44,7 +44,7 @@ func TestParseALBLogFields(t *testing.T) {
 		{
 			name:   "POST request with different path",
 			fields: parseLogEntry(t, postLogEntry),
-			want:   albLogEntry{
+			want: albLogEntry{
 				timestamp: time.Date(2024, 1, 15, 10, 0, 1, 0, time.UTC),
 				method:    "POST",
 				host:      "api.example.com",
