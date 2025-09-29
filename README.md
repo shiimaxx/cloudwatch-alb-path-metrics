@@ -67,8 +67,7 @@ Log entries that do not match any rule are ignored to prevent Route dimension ca
 
 To build and run the project locally using Docker, use the following commands:
 ```
-docker build --tag cloudwatch-alb-path-metrics .
-docker run --rm -p 9000:8080 cloudwatch-alb-path-metrics
+script/run.sh
 ```
 
 Invoke the function with a test event:
