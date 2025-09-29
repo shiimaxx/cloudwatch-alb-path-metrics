@@ -29,12 +29,13 @@ Define path rules to group high-cardinality URLs into stable patterns before pub
 - `host` (required): Exact host name comparison performed against the log entry.
 - `path` (required): Regular expression applied to the request path.
 - `route` (required): Normalized path string emitted in the `Path` dimension when both host and regex match.
+- `method` (optional): HTTP method to match (case-insensitive). When omitted, the rule matches any method.
 
 ```json
 [
-  {"host":"example.com","path":"^/users/[0-9]+$","route":"/users/:id"},
+  {"host":"example.com","path":"^/users/[0-9]+$","route":"/users/:id","method":"GET"},
   {"host":"example.com","path":"^/articles/(?:[a-z0-9-]+)/comments$","route":"/article/:slug/comments"},
-  {"host":"admin.example.com","path":"^/dashboard(?:/.*)?$","route":"/dashboard/*"}
+  {"host":"admin.example.com","path":"^/dashboard(?:/.*)?$","route":"/dashboard/*","method":"POST"}
 ]
 ```
 

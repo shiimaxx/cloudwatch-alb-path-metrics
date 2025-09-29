@@ -9,7 +9,7 @@ import (
 )
 
 func TestPathRuleConfig_Unmarshal(t *testing.T) {
-	payload := `{"host":"example.com","path":"^/users/[0-9]+$","route":"/users/:id"}`
+	payload := `{"host":"example.com","path":"^/users/[0-9]+$","route":"/users/:id","method":"GET"}`
 
 	var rule pathRuleConfig
 	err := json.Unmarshal([]byte(payload), &rule)
@@ -18,11 +18,12 @@ func TestPathRuleConfig_Unmarshal(t *testing.T) {
 	assert.Equal(t, "example.com", rule.Host)
 	assert.Equal(t, "^/users/[0-9]+$", rule.Path)
 	assert.Equal(t, "/users/:id", rule.Route)
+	assert.Equal(t, "GET", rule.Method)
 }
 
 func TestNewPathRules_Success(t *testing.T) {
 	raw := `[
-		{"host":"example.com","path":"^/users/[0-9]+$","route":"/users/:id"},
+		{"host":"example.com","path":"^/users/[0-9]+$","route":"/users/:id","method":"GET"},
 		{"host":"example.com","path":"^/articles/[a-z0-9-]+$","route":"/articles/:slug"}
 	]`
 
@@ -38,11 +39,13 @@ func TestNewPathRules_Success(t *testing.T) {
 	assert.Equal(t, "/users/:id", first.route)
 	assert.True(t, first.regex.MatchString("/users/42"))
 	assert.False(t, first.regex.MatchString("/articles/next-gen"))
+	assert.Equal(t, "GET", first.method)
 
 	second := rules.rules[1]
 	assert.Equal(t, "example.com", second.host)
 	assert.Equal(t, "/articles/:slug", second.route)
 	assert.True(t, second.regex.MatchString("/articles/next-gen"))
+	assert.Empty(t, second.method)
 }
 
 func TestNewPathRules_EmptyString(t *testing.T) {
@@ -88,7 +91,7 @@ func TestPathRulesNormalize_Match(t *testing.T) {
 	rules, err := newPathRules(raw)
 	require.NoError(t, err)
 
-	entry := albLogEntry{host: "example.com", path: "/users/42"}
+	entry := albLogEntry{host: "example.com", path: "/users/42", method: "GET"}
 
 	route, matched := rules.normalize(entry)
 
@@ -102,7 +105,21 @@ func TestPathRulesNormalize_NoMatch(t *testing.T) {
 	rules, err := newPathRules(raw)
 	require.NoError(t, err)
 
-	entry := albLogEntry{host: "api.example.com", path: "/users/abc"}
+	entry := albLogEntry{host: "api.example.com", path: "/users/abc", method: "POST"}
+
+	route, matched := rules.normalize(entry)
+
+	assert.False(t, matched)
+	assert.Empty(t, route)
+}
+
+func TestPathRulesNormalize_MethodMismatch(t *testing.T) {
+	raw := `[{"host":"example.com","path":"^/users/[0-9]+$","route":"/users/:id","method":"POST"}]`
+
+	rules, err := newPathRules(raw)
+	require.NoError(t, err)
+
+	entry := albLogEntry{host: "example.com", path: "/users/42", method: "GET"}
 
 	route, matched := rules.normalize(entry)
 
@@ -113,7 +130,7 @@ func TestPathRulesNormalize_NoMatch(t *testing.T) {
 func TestPathRulesNormalize_Disabled(t *testing.T) {
 	rules := &pathRules{}
 
-	entry := albLogEntry{host: "example.com", path: "/users/42"}
+	entry := albLogEntry{host: "example.com", path: "/users/42", method: "GET"}
 
 	route, matched := rules.normalize(entry)
 
