@@ -10,20 +10,15 @@ import (
 )
 
 func TestNewMetricAggregator(t *testing.T) {
-	namespace := "TestNamespace"
-	service := "TestService"
-
-	aggregator := NewMetricAggregator(namespace, service)
+	aggregator := NewMetricAggregator()
 
 	assert.NotNil(t, aggregator)
-	assert.Equal(t, namespace, aggregator.namespace)
-	assert.Equal(t, service, aggregator.service)
 	assert.NotNil(t, aggregator.metrics)
 	assert.Empty(t, aggregator.metrics)
 }
 
 func TestMetricAggregator_RecordAggregatesMetrics(t *testing.T) {
-	aggregator := NewMetricAggregator("TestNamespace", "TestService")
+	aggregator := NewMetricAggregator()
 
 	route := "/users/:id"
 	time1 := time.Date(2024, 1, 1, 12, 0, 10, 0, time.UTC)
@@ -52,7 +47,7 @@ func TestMetricAggregator_RecordAggregatesMetrics(t *testing.T) {
 }
 
 func TestMetricAggregator_GetCloudWatchMetricData(t *testing.T) {
-	aggregator := NewMetricAggregator("TestNamespace", "TestService")
+	aggregator := NewMetricAggregator()
 
 	route := "/check"
 	time1 := time.Date(2024, 2, 1, 8, 0, 10, 0, time.UTC)
@@ -89,10 +84,10 @@ func TestMetricAggregator_GetCloudWatchMetricData(t *testing.T) {
 		for _, dim := range datum.Dimensions {
 			dims[*dim.Name] = *dim.Value
 		}
-		assert.Equal(t, "TestService", dims["Service"])
 		assert.Equal(t, "GET", dims["Method"])
 		assert.Equal(t, "api.example.com", dims["Host"])
 		assert.Equal(t, route, dims["Route"])
+		assert.NotContains(t, dims, "Service")
 
 		switch ts {
 		case minute1:
@@ -157,7 +152,7 @@ func TestMetricAggregator_GetCloudWatchMetricData(t *testing.T) {
 }
 
 func TestMetricAggregator_GetCloudWatchMetricData_EmptyMetrics(t *testing.T) {
-	aggregator := NewMetricAggregator("TestNamespace", "TestService")
+	aggregator := NewMetricAggregator()
 
 	metricData := aggregator.GetCloudWatchMetricData()
 

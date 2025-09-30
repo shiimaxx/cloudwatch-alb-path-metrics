@@ -31,17 +31,12 @@ func handler(ctx context.Context, s3Event events.S3Event) error {
 		return fmt.Errorf("NAMESPACE environment variable is required")
 	}
 
-	service := strings.TrimSpace(os.Getenv("SERVICE"))
-	if service == "" {
-		return fmt.Errorf("SERVICE environment variable is required")
-	}
-
 	rules, err := newPathRules(os.Getenv("INCLUDE_PATH_RULES"))
 	if err != nil {
 		return fmt.Errorf("parse path rules: %w", err)
 	}
 
-	aggregator := NewMetricAggregator(namespace, service)
+	aggregator := NewMetricAggregator()
 	publisher := NewCloudWatchMetricPublisher(cwClient, namespace)
 
 	for _, record := range s3Event.Records {

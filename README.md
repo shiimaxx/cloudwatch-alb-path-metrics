@@ -19,7 +19,6 @@ AWS-native tooling does not surface path-level metrics out of the box; you must 
 | Variable | Description | Required | Example |
 |----------|-------------|----------|---------|
 | `NAMESPACE` | CloudWatch custom metrics namespace | Yes | `MyApplication/ALB` |
-| `SERVICE` | Service name used as the `Service` metric dimension | Yes | `web-api` |
 | `INCLUDE_PATH_RULES` | JSON array describing host-aware path normalization rules | No | `[{"host":"example.com","path":"^/users/[0-9]+$","route":"/users/:id"}]` |
 
 ### Path Rules
@@ -59,7 +58,6 @@ Log entries that do not match any rule are ignored to prevent Route dimension ca
 
 | Name | Description | Example |
 |------|-------------|---------|
-| `Service` | Value of the `SERVICE` environment variable | `web-api` |
 | `Method` | HTTP method extracted from the ALB log entry | `GET` |
 | `Host` | Request host used to route traffic | `api.example.com` |
 | `Route` | Normalized logical path name after applying `INCLUDE_PATH_RULES` | `UsersById` |

@@ -28,17 +28,13 @@ type metricAggregate struct {
 
 // MetricAggregator maintains per method/host/route aggregates convertible to CloudWatch MetricDatum values.
 type MetricAggregator struct {
-	metrics   map[metricKey]*metricAggregate
-	namespace string
-	service   string
+	metrics map[metricKey]*metricAggregate
 }
 
 // NewMetricAggregator creates a new MetricAggregator instance.
-func NewMetricAggregator(namespace, service string) *MetricAggregator {
+func NewMetricAggregator() *MetricAggregator {
 	return &MetricAggregator{
-		metrics:   make(map[metricKey]*metricAggregate),
-		namespace: namespace,
-		service:   service,
+		metrics: make(map[metricKey]*metricAggregate),
 	}
 }
 
@@ -77,7 +73,6 @@ func (m *MetricAggregator) GetCloudWatchMetricData() []types.MetricDatum {
 		timestamp := key.Minute
 
 		dimensions := []types.Dimension{
-			{Name: aws.String("Service"), Value: aws.String(m.service)},
 			{Name: aws.String("Method"), Value: aws.String(key.Method)},
 			{Name: aws.String("Host"), Value: aws.String(key.Host)},
 			{Name: aws.String("Route"), Value: aws.String(key.Route)},

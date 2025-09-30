@@ -14,6 +14,5 @@ aws lambda update-function-configuration \
   --environment Variables="
 {
   NAMESPACE=\"shiimaxx\",
-  SERVICE=\"hello\",
   INCLUDE_PATH_RULES=\"${INCLUDE_PATH_RULES}\",
 }"
