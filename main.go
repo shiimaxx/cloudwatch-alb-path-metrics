@@ -27,8 +27,8 @@ func handler(ctx context.Context, s3Event events.S3Event) error {
 	cwClient := cloudwatch.NewFromConfig(cfg)
 
 	namespace := strings.TrimSpace(os.Getenv("NAMESPACE"))
-	if namespace == "" {
-		return fmt.Errorf("NAMESPACE environment variable is required")
+	if err := validateCloudWatchNamespace(namespace); err != nil {
+		return fmt.Errorf("invalid CloudWatch namespace: %w", err)
 	}
 
 	rules, err := newPathRules(os.Getenv("INCLUDE_PATH_RULES"))
@@ -82,6 +82,29 @@ func handler(ctx context.Context, s3Event events.S3Event) error {
 				data.Timestamp,
 				aws.ToFloat64(data.Value),
 			)
+		}
+	}
+
+	return nil
+}
+
+func validateCloudWatchNamespace(namespace string) error {
+	if namespace == "" {
+		return fmt.Errorf("NAMESPACE environment variable is required")
+	}
+
+	if len(namespace) > 255 {
+		return fmt.Errorf("namespace must be at most 255 characters")
+	}
+
+	if strings.HasPrefix(namespace, "AWS/") {
+		return fmt.Errorf("namespace must not start with 'AWS/'")
+	}
+
+	for i := 0; i < len(namespace); i++ {
+		b := namespace[i]
+		if b < 32 || b > 126 {
+			return fmt.Errorf("namespace must contain only printable ASCII characters; found 0x%X at position %d", b, i+1)
 		}
 	}
 
