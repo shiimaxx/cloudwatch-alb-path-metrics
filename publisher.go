@@ -20,15 +20,11 @@ type CloudWatchMetricPublisher struct {
 
 // Publish sends metric data to CloudWatch in batches that respect PutMetricData limits.
 func (p *CloudWatchMetricPublisher) Publish(ctx context.Context, data []types.MetricDatum) error {
-	if p == nil {
-		return fmt.Errorf("metric publisher is nil")
-	}
-
 	if len(data) == 0 {
 		return nil
 	}
 
-	chunks, err := chunkMetricData(data, p.maxBatchSize)
+	chunks, err := p.chunkMetricData(data)
 	if err != nil {
 		return fmt.Errorf("prepare metric batches: %w", err)
 	}
@@ -52,9 +48,10 @@ func (p *CloudWatchMetricPublisher) Publish(ctx context.Context, data []types.Me
 }
 
 // chunkMetricData splits the provided metric data into size-bounded batches.
-func chunkMetricData(data []types.MetricDatum, size int) ([][]types.MetricDatum, error) {
+func (p *CloudWatchMetricPublisher) chunkMetricData(data []types.MetricDatum) ([][]types.MetricDatum, error) {
+	size := p.maxBatchSize
 	if size <= 0 {
-		return nil, fmt.Errorf("batch size must be greater than zero")
+		return nil, fmt.Errorf("invalid max batch size %d", size)
 	}
 
 	if len(data) == 0 {

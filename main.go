@@ -26,10 +26,6 @@ type MetricsProcessor struct {
 }
 
 func (p *MetricsProcessor) HandleEvent(ctx context.Context, s3Event events.S3Event) error {
-	if p == nil {
-		return fmt.Errorf("metrics processor is nil")
-	}
-
 	for _, record := range s3Event.Records {
 		bucket := record.S3.Bucket.Name
 		if bucket == "" {
@@ -46,17 +42,9 @@ func (p *MetricsProcessor) HandleEvent(ctx context.Context, s3Event events.S3Eve
 		}
 	}
 
-	if p.aggregator == nil {
-		return fmt.Errorf("metric aggregator is nil")
-	}
-
 	metricData := p.aggregator.GetCloudWatchMetricData()
 	if len(metricData) == 0 {
 		return nil
-	}
-
-	if p.publisher == nil {
-		return fmt.Errorf("metric publisher is nil")
 	}
 
 	if err := p.publisher.Publish(ctx, metricData); err != nil {
@@ -69,10 +57,6 @@ func (p *MetricsProcessor) HandleEvent(ctx context.Context, s3Event events.S3Eve
 }
 
 func (p *MetricsProcessor) streamObjectLines(ctx context.Context, bucket, key string) error {
-	if p.s3Client == nil {
-		return fmt.Errorf("s3 client is nil")
-	}
-
 	resp, err := p.s3Client.GetObject(ctx, &s3.GetObjectInput{Bucket: aws.String(bucket), Key: aws.String(key)})
 	if err != nil {
 		return fmt.Errorf("get object: %w", err)
@@ -88,13 +72,11 @@ func (p *MetricsProcessor) streamObjectLines(ctx context.Context, bucket, key st
 	scanner := bufio.NewScanner(gzipReader)
 	for scanner.Scan() {
 		line := scanner.Text()
-		entry, route, ok := normalizeLogLine(line, p.rules)
-		if !ok {
+		entry, route, matched := p.normalizeLogLine(line)
+		if !matched {
 			continue
 		}
-		if p.aggregator != nil {
-			p.aggregator.Record(*entry, route)
-		}
+		p.aggregator.Record(*entry, route)
 	}
 
 	if err := scanner.Err(); err != nil {

@@ -17,7 +17,8 @@ func TestChunkMetricData_SplitsIntoExpectedBatchSizes(t *testing.T) {
 		metrics[i] = types.MetricDatum{MetricName: name}
 	}
 
-	batches, err := chunkMetricData(metrics, 3)
+	publisher := &CloudWatchMetricPublisher{maxBatchSize: 3}
+	batches, err := publisher.chunkMetricData(metrics)
 	require.NoError(t, err)
 
 	expectedBatchCounts := []int{3, 3, 1}
@@ -34,12 +35,14 @@ func TestChunkMetricData_SplitsIntoExpectedBatchSizes(t *testing.T) {
 }
 
 func TestChunkMetricData_HandlesEmptyInput(t *testing.T) {
-	batches, err := chunkMetricData([]types.MetricDatum{}, 5)
+	publisher := &CloudWatchMetricPublisher{maxBatchSize: 5}
+	batches, err := publisher.chunkMetricData([]types.MetricDatum{})
 	require.NoError(t, err)
 	assert.Empty(t, batches)
 }
 
 func TestChunkMetricData_InvalidSize(t *testing.T) {
-	_, err := chunkMetricData(make([]types.MetricDatum, 1), 0)
+	publisher := &CloudWatchMetricPublisher{maxBatchSize: 0}
+	_, err := publisher.chunkMetricData(make([]types.MetricDatum, 1))
 	assert.Error(t, err)
 }
