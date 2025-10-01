@@ -7,17 +7,17 @@ import (
 
 func TestValidateCloudWatchNamespace(t *testing.T) {
 	tests := []struct {
-		name    string
-		ns      string
-		wantErr bool
+		name string
+		ns   string
+		want bool
 	}{
-		{name: "valid", ns: "MyApp/Metrics", wantErr: false},
-		{name: "valid with space", ns: "Custom Namespace", wantErr: false},
-		{name: "empty", ns: "", wantErr: true},
-		{name: "too long", ns: strings.Repeat("a", 256), wantErr: true},
-		{name: "reserved prefix", ns: "AWS/Custom", wantErr: true},
-		{name: "non ascii", ns: "メトリクス", wantErr: true},
-		{name: "control char", ns: "metric\nname", wantErr: true},
+		{name: "valid", ns: "MyApp/Metrics", want: false},
+		{name: "valid with space", ns: "Custom Namespace", want: false},
+		{name: "empty", ns: "", want: true},
+		{name: "too long", ns: strings.Repeat("a", 256), want: true},
+		{name: "reserved prefix", ns: "AWS/Custom", want: true},
+		{name: "non ascii", ns: "メトリクス", want: true},
+		{name: "control char", ns: "metric\nname", want: true},
 	}
 
 	for _, tc := range tests {
@@ -26,7 +26,7 @@ func TestValidateCloudWatchNamespace(t *testing.T) {
 			t.Parallel()
 
 			err := validateCloudWatchNamespace(tc.ns)
-			if tc.wantErr {
+			if tc.want {
 				if err == nil {
 					t.Fatalf("expected error for namespace %q", tc.ns)
 				}
