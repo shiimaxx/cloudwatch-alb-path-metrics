@@ -29,18 +29,18 @@ func TestMetricAggregator_RecordAggregatesMetrics(t *testing.T) {
 	aggregator.Record(albLogEntry{method: "GET", host: "example.com", status: 502, duration: 0.34, timestamp: time2}, route)
 	aggregator.Record(albLogEntry{method: "GET", host: "example.com", status: 200, duration: 0.56, timestamp: time3}, route)
 
-	require.Len(t, aggregator.metrics, 2)
+	assert.Len(t, aggregator.metrics, 2)
 
 	minute1Key := metricKey{Method: "GET", Host: "example.com", Route: route, Minute: time1.Truncate(time.Minute)}
 	minute1Agg, ok := aggregator.metrics[minute1Key]
-	require.True(t, ok)
+	assert.True(t, ok)
 	assert.Equal(t, 1, minute1Agg.successCount)
 	assert.Equal(t, 1, minute1Agg.failedCount)
 	assert.Equal(t, []float64{0.12, 0.34}, minute1Agg.durations)
 
 	minute2Key := metricKey{Method: "GET", Host: "example.com", Route: route, Minute: time3.Truncate(time.Minute)}
 	minute2Agg, ok := aggregator.metrics[minute2Key]
-	require.True(t, ok)
+	assert.True(t, ok)
 	assert.Equal(t, 1, minute2Agg.successCount)
 	assert.Equal(t, 0, minute2Agg.failedCount)
 	assert.Equal(t, []float64{0.56}, minute2Agg.durations)
@@ -59,7 +59,7 @@ func TestMetricAggregator_GetCloudWatchMetricData(t *testing.T) {
 	aggregator.Record(albLogEntry{method: "GET", host: "api.example.com", status: 200, duration: 0.6, timestamp: time3}, route)
 
 	metricData := aggregator.GetCloudWatchMetricData()
-	require.Len(t, metricData, 6)
+	assert.Len(t, metricData, 6)
 
 	minute1 := time1.Truncate(time.Minute)
 	minute2 := time3.Truncate(time.Minute)
