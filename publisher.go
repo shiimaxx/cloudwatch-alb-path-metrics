@@ -18,15 +18,6 @@ type CloudWatchMetricPublisher struct {
 	maxBatchSize int
 }
 
-// NewCloudWatchMetricPublisher creates a publisher with the default batch size.
-func NewCloudWatchMetricPublisher(client *cloudwatch.Client, namespace string) *CloudWatchMetricPublisher {
-	return &CloudWatchMetricPublisher{
-		client:       client,
-		namespace:    namespace,
-		maxBatchSize: defaultMetricBatchSize,
-	}
-}
-
 // Publish sends metric data to CloudWatch in batches that respect PutMetricData limits.
 func (p *CloudWatchMetricPublisher) Publish(ctx context.Context, data []types.MetricDatum) error {
 	if p == nil {

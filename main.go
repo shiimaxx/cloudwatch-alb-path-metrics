@@ -14,30 +14,21 @@ import (
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/cloudwatch"
+	"github.com/aws/aws-sdk-go-v2/service/cloudwatch/types"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 )
 
-func handler(ctx context.Context, s3Event events.S3Event) error {
-	cfg, err := config.LoadDefaultConfig(ctx)
-	if err != nil {
-		return fmt.Errorf("load AWS config: %w", err)
+type MetricsProcessor struct {
+	s3Client   *s3.Client
+	rules      *pathRules
+	aggregator *MetricAggregator
+	publisher  *CloudWatchMetricPublisher
+}
+
+func (p *MetricsProcessor) HandleEvent(ctx context.Context, s3Event events.S3Event) error {
+	if p == nil {
+		return fmt.Errorf("metrics processor is nil")
 	}
-
-	s3Client := s3.NewFromConfig(cfg)
-	cwClient := cloudwatch.NewFromConfig(cfg)
-
-	namespace := strings.TrimSpace(os.Getenv("NAMESPACE"))
-	if err := validateCloudWatchNamespace(namespace); err != nil {
-		return fmt.Errorf("invalid CloudWatch namespace: %w", err)
-	}
-
-	rules, err := newPathRules(os.Getenv("INCLUDE_PATH_RULES"))
-	if err != nil {
-		return fmt.Errorf("parse path rules: %w", err)
-	}
-
-	aggregator := NewMetricAggregator()
-	publisher := NewCloudWatchMetricPublisher(cwClient, namespace)
 
 	for _, record := range s3Event.Records {
 		bucket := record.S3.Bucket.Name
@@ -50,23 +41,77 @@ func handler(ctx context.Context, s3Event events.S3Event) error {
 			return fmt.Errorf("decode object key %q: %w", record.S3.Object.Key, err)
 		}
 
-		if err := streamObjectLines(ctx, s3Client, bucket, key, rules, aggregator); err != nil {
+		if err := p.streamObjectLines(ctx, bucket, key); err != nil {
 			return fmt.Errorf("stream s3://%s/%s: %w", bucket, key, err)
 		}
 	}
 
-	metricData := aggregator.GetCloudWatchMetricData()
+	if p.aggregator == nil {
+		return fmt.Errorf("metric aggregator is nil")
+	}
+
+	metricData := p.aggregator.GetCloudWatchMetricData()
 	if len(metricData) == 0 {
 		return nil
 	}
 
-	if err := publisher.Publish(ctx, metricData); err != nil {
+	if p.publisher == nil {
+		return fmt.Errorf("metric publisher is nil")
+	}
+
+	if err := p.publisher.Publish(ctx, metricData); err != nil {
 		return fmt.Errorf("publish metrics: %w", err)
 	}
 
-	// For demonstration purposes, print the metrics to stdout.
+	p.logMetrics(metricData)
+
+	return nil
+}
+
+func (p *MetricsProcessor) streamObjectLines(ctx context.Context, bucket, key string) error {
+	if p.s3Client == nil {
+		return fmt.Errorf("s3 client is nil")
+	}
+
+	resp, err := p.s3Client.GetObject(ctx, &s3.GetObjectInput{Bucket: aws.String(bucket), Key: aws.String(key)})
+	if err != nil {
+		return fmt.Errorf("get object: %w", err)
+	}
+	defer resp.Body.Close()
+
+	gzipReader, err := gzip.NewReader(resp.Body)
+	if err != nil {
+		return fmt.Errorf("create gzip reader: %w", err)
+	}
+	defer gzipReader.Close()
+
+	scanner := bufio.NewScanner(gzipReader)
+	for scanner.Scan() {
+		line := scanner.Text()
+		entry, route, ok := normalizeLogLine(line, p.rules)
+		if !ok {
+			continue
+		}
+		if p.aggregator != nil {
+			p.aggregator.Record(*entry, route)
+		}
+	}
+
+	if err := scanner.Err(); err != nil {
+		return fmt.Errorf("scan gzip stream: %w", err)
+	}
+
+	return nil
+}
+
+func (p *MetricsProcessor) logMetrics(metricData []types.MetricDatum) {
 	for _, data := range metricData {
-		if *data.MetricName == metricNameResponseTime {
+		if data.MetricName == nil {
+			continue
+		}
+
+		switch aws.ToString(data.MetricName) {
+		case metricNameResponseTime:
 			fmt.Printf("Metric: %s, Dimensions: %v, Timestamp: %v, Values: %v, Counts: %v\n",
 				aws.ToString(data.MetricName),
 				data.Dimensions,
@@ -74,9 +119,7 @@ func handler(ctx context.Context, s3Event events.S3Event) error {
 				data.Values,
 				data.Counts,
 			)
-		}
-
-		if *data.MetricName == metricNameRequestCount || *data.MetricName == metricNameFailedRequestCount {
+		case metricNameRequestCount, metricNameFailedRequestCount:
 			fmt.Printf("Metric: %s, Dimensions: %v, Timestamp: %v, Value: %v\n",
 				aws.ToString(data.MetricName),
 				data.Dimensions,
@@ -85,8 +128,36 @@ func handler(ctx context.Context, s3Event events.S3Event) error {
 			)
 		}
 	}
+}
 
-	return nil
+func handler(ctx context.Context, s3Event events.S3Event) error {
+	namespace := os.Getenv("NAMESPACE")
+	if err := validateCloudWatchNamespace(namespace); err != nil {
+		return fmt.Errorf("invalid CloudWatch namespace: %w", err)
+	}
+
+	rules, err := newPathRules(os.Getenv("INCLUDE_PATH_RULES"))
+	if err != nil {
+		return fmt.Errorf("parse path rules: %w", err)
+	}
+
+	cfg, err := config.LoadDefaultConfig(ctx)
+	if err != nil {
+		return fmt.Errorf("load AWS config: %w", err)
+	}
+
+	processor := &MetricsProcessor{
+		s3Client:   s3.NewFromConfig(cfg),
+		rules:      rules,
+		aggregator: &MetricAggregator{metrics: make(map[metricKey]*metricAggregate)},
+		publisher: &CloudWatchMetricPublisher{
+			client:       cloudwatch.NewFromConfig(cfg),
+			namespace:    namespace,
+			maxBatchSize: defaultMetricBatchSize,
+		},
+	}
+
+	return processor.HandleEvent(ctx, s3Event)
 }
 
 func validateCloudWatchNamespace(namespace string) error {
@@ -107,38 +178,6 @@ func validateCloudWatchNamespace(namespace string) error {
 		if b < 32 || b > 126 {
 			return fmt.Errorf("namespace must contain only printable ASCII characters; found 0x%X at position %d", b, i+1)
 		}
-	}
-
-	return nil
-}
-
-func streamObjectLines(ctx context.Context, client *s3.Client, bucket, key string, rules *pathRules, aggregator *MetricAggregator) error {
-	resp, err := client.GetObject(ctx, &s3.GetObjectInput{Bucket: aws.String(bucket), Key: aws.String(key)})
-	if err != nil {
-		return fmt.Errorf("get object: %w", err)
-	}
-	defer resp.Body.Close()
-
-	gzipReader, err := gzip.NewReader(resp.Body)
-	if err != nil {
-		return fmt.Errorf("create gzip reader: %w", err)
-	}
-	defer gzipReader.Close()
-
-	scanner := bufio.NewScanner(gzipReader)
-	for scanner.Scan() {
-		line := scanner.Text()
-		entry, route, ok := normalizeLogLine(line, rules)
-		if !ok {
-			continue
-		}
-		if aggregator != nil {
-			aggregator.Record(*entry, route)
-		}
-	}
-
-	if err := scanner.Err(); err != nil {
-		return fmt.Errorf("scan gzip stream: %w", err)
 	}
 
 	return nil

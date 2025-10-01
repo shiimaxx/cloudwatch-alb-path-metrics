@@ -9,8 +9,8 @@ import (
 
 func TestValidateCloudWatchNamespace(t *testing.T) {
 	tests := []struct {
-		name string
-		ns   string
+		name    string
+		ns      string
 		wantErr bool
 	}{
 		{name: "valid", ns: "MyApp/Metrics", wantErr: false},
