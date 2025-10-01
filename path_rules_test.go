@@ -11,7 +11,7 @@ import (
 func TestPathRuleConfig_Unmarshal(t *testing.T) {
 	payload := `{"host":"example.com","path":"^/users/[0-9]+$","route":"/users/:id","method":"GET"}`
 
-	var rule pathRuleConfig
+	var rule PathRuleConfig
 	err := json.Unmarshal([]byte(payload), &rule)
 
 	require.NoError(t, err)
@@ -27,7 +27,7 @@ func TestNewPathRules_Success(t *testing.T) {
 		{"host":"example.com","path":"^/articles/[a-z0-9-]+$","route":"/articles/:slug"}
 	]`
 
-	rules, err := newPathRules(raw)
+	rules, err := NewPathRules(raw)
 
 	require.NoError(t, err)
 	require.NotNil(t, rules)
@@ -49,7 +49,7 @@ func TestNewPathRules_Success(t *testing.T) {
 }
 
 func TestNewPathRules_EmptyString(t *testing.T) {
-	rules, err := newPathRules("")
+	rules, err := NewPathRules("")
 
 	require.NoError(t, err)
 	require.NotNil(t, rules)
@@ -58,7 +58,7 @@ func TestNewPathRules_EmptyString(t *testing.T) {
 }
 
 func TestNewPathRules_InvalidJSON(t *testing.T) {
-	_, err := newPathRules("not-json")
+	_, err := NewPathRules("not-json")
 	assert.Error(t, err)
 }
 
@@ -74,21 +74,21 @@ func TestNewPathRules_MissingFields(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			_, err := newPathRules(tt.json)
+			_, err := NewPathRules(tt.json)
 			assert.Error(t, err)
 		})
 	}
 }
 
 func TestNewPathRules_InvalidRegex(t *testing.T) {
-	_, err := newPathRules(`[{"host":"example.com","path":"^/users/[","route":"/users/:id"}]`)
+	_, err := NewPathRules(`[{"host":"example.com","path":"^/users/[","route":"/users/:id"}]`)
 	assert.Error(t, err)
 }
 
 func TestPathRulesNormalize_Match(t *testing.T) {
 	raw := `[{"host":"example.com","path":"^/users/[0-9]+$","route":"/users/:id"}]`
 
-	rules, err := newPathRules(raw)
+	rules, err := NewPathRules(raw)
 	require.NoError(t, err)
 
 	entry := albLogEntry{host: "example.com", path: "/users/42", method: "GET"}
@@ -102,7 +102,7 @@ func TestPathRulesNormalize_Match(t *testing.T) {
 func TestPathRulesNormalize_NoMatch(t *testing.T) {
 	raw := `[{"host":"example.com","path":"^/users/[0-9]+$","route":"/users/:id"}]`
 
-	rules, err := newPathRules(raw)
+	rules, err := NewPathRules(raw)
 	require.NoError(t, err)
 
 	entry := albLogEntry{host: "api.example.com", path: "/users/abc", method: "POST"}
@@ -116,7 +116,7 @@ func TestPathRulesNormalize_NoMatch(t *testing.T) {
 func TestPathRulesNormalize_MethodMismatch(t *testing.T) {
 	raw := `[{"host":"example.com","path":"^/users/[0-9]+$","route":"/users/:id","method":"POST"}]`
 
-	rules, err := newPathRules(raw)
+	rules, err := NewPathRules(raw)
 	require.NoError(t, err)
 
 	entry := albLogEntry{host: "example.com", path: "/users/42", method: "GET"}
@@ -128,7 +128,7 @@ func TestPathRulesNormalize_MethodMismatch(t *testing.T) {
 }
 
 func TestPathRulesNormalize_Disabled(t *testing.T) {
-	rules := &pathRules{}
+	rules := &PathRules{}
 
 	entry := albLogEntry{host: "example.com", path: "/users/42", method: "GET"}
 

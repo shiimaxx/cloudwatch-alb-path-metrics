@@ -20,7 +20,7 @@ import (
 
 type MetricsProcessor struct {
 	s3Client   *s3.Client
-	rules      *pathRules
+	rules      *PathRules
 	aggregator *MetricAggregator
 	publisher  *CloudWatchMetricPublisher
 }
@@ -118,7 +118,7 @@ func handler(ctx context.Context, s3Event events.S3Event) error {
 		return fmt.Errorf("invalid CloudWatch namespace: %w", err)
 	}
 
-	rules, err := newPathRules(os.Getenv("INCLUDE_PATH_RULES"))
+	rules, err := NewPathRules(os.Getenv("INCLUDE_PATH_RULES"))
 	if err != nil {
 		return fmt.Errorf("parse path rules: %w", err)
 	}

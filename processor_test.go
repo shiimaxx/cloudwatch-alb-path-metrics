@@ -8,7 +8,7 @@ import (
 )
 
 func TestNormalizeLogLine_Match(t *testing.T) {
-	rules, err := newPathRules(`[{"host":"api.example.com","path":"^/users/[0-9]+$","route":"/users/:id"}]`)
+	rules, err := NewPathRules(`[{"host":"api.example.com","path":"^/users/[0-9]+$","route":"/users/:id"}]`)
 	require.NoError(t, err)
 	processor := &MetricsProcessor{rules: rules}
 
@@ -22,7 +22,7 @@ func TestNormalizeLogLine_Match(t *testing.T) {
 }
 
 func TestNormalizeLogLine_NoMatch(t *testing.T) {
-	rules, err := newPathRules(`[{"host":"api.example.com","path":"^/users/[0-9]+$","route":"/users/:id"}]`)
+	rules, err := NewPathRules(`[{"host":"api.example.com","path":"^/users/[0-9]+$","route":"/users/:id"}]`)
 	require.NoError(t, err)
 	processor := &MetricsProcessor{rules: rules}
 
@@ -35,7 +35,7 @@ func TestNormalizeLogLine_NoMatch(t *testing.T) {
 }
 
 func TestNormalizeLogLine_ParseError(t *testing.T) {
-	rules, err := newPathRules(`[{"host":"api.example.com","path":"^/users/[0-9]+$","route":"/users/:id"}]`)
+	rules, err := NewPathRules(`[{"host":"api.example.com","path":"^/users/[0-9]+$","route":"/users/:id"}]`)
 	require.NoError(t, err)
 	processor := &MetricsProcessor{rules: rules}
 
