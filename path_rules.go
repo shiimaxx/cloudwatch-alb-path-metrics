@@ -48,32 +48,29 @@ func newPathRules(raw string) (*pathRules, error) {
 	compiled := make([]compiledRule, 0, len(configs))
 
 	for idx, cfg := range configs {
-		host := strings.TrimSpace(cfg.Host)
-		if host == "" {
+		if cfg.Host == "" {
 			return nil, fmt.Errorf("path rule %d: host is required", idx)
 		}
 
-		pattern := strings.TrimSpace(cfg.Path)
-		if pattern == "" {
+		if cfg.Path == "" {
 			return nil, fmt.Errorf("path rule %d: path regex is required", idx)
 		}
 
-		route := strings.TrimSpace(cfg.Route)
-		if route == "" {
+		if cfg.Route == "" {
 			return nil, fmt.Errorf("path rule %d: route is required", idx)
 		}
 
-		method := strings.ToUpper(strings.TrimSpace(cfg.Method))
+		method := strings.ToUpper(cfg.Method)
 
-		regex, err := regexp.Compile(pattern)
+		regex, err := regexp.Compile(cfg.Path)
 		if err != nil {
 			return nil, fmt.Errorf("path rule %d: failed to compile regex: %w", idx, err)
 		}
 
 		compiled = append(compiled, compiledRule{
-			host:   host,
+			host:   cfg.Host,
 			method: method,
-			route:  route,
+			route:  cfg.Route,
 			regex:  regex,
 		})
 	}

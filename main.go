@@ -64,6 +64,7 @@ func handler(ctx context.Context, s3Event events.S3Event) error {
 		return fmt.Errorf("publish metrics: %w", err)
 	}
 
+	// For demonstration purposes, print the metrics to stdout.
 	for _, data := range metricData {
 		if *data.MetricName == metricNameResponseTime {
 			fmt.Printf("Metric: %s, Dimensions: %v, Timestamp: %v, Values: %v, Counts: %v\n",
