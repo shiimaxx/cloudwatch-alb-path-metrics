@@ -99,7 +99,7 @@ func TestMetricAggregator_GetCloudWatchMetricData(t *testing.T) {
 			case metricNameFailedRequestCount:
 				minute1FailedCount = &datum
 			default:
-				t.Fatalf("unexpected metric name for minute1: %s", *datum.MetricName)
+				require.Failf(t, "unexpected metric name for minute1", "metric: %s", *datum.MetricName)
 			}
 		case minute2:
 			switch *datum.MetricName {
@@ -110,10 +110,10 @@ func TestMetricAggregator_GetCloudWatchMetricData(t *testing.T) {
 			case metricNameFailedRequestCount:
 				minute2FailedCount = &datum
 			default:
-				t.Fatalf("unexpected metric name for minute2: %s", *datum.MetricName)
+				require.Failf(t, "unexpected metric name for minute2", "metric: %s", *datum.MetricName)
 			}
 		default:
-			t.Fatalf("unexpected timestamp: %s", ts)
+			require.Failf(t, "unexpected timestamp", "%s", ts.String())
 		}
 	}
 

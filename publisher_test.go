@@ -6,6 +6,8 @@ import (
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/cloudwatch/types"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestChunkMetricData_SplitsIntoExpectedBatchSizes(t *testing.T) {
@@ -16,25 +18,16 @@ func TestChunkMetricData_SplitsIntoExpectedBatchSizes(t *testing.T) {
 	}
 
 	batches, err := chunkMetricData(metrics, 3)
-	if err != nil {
-		t.Fatalf("chunkMetricData returned error: %v", err)
-	}
+	require.NoError(t, err)
 
 	expectedBatchCounts := []int{3, 3, 1}
-	if len(batches) != len(expectedBatchCounts) {
-		t.Fatalf("expected %d batches, got %d", len(expectedBatchCounts), len(batches))
-	}
+	require.Lenf(t, batches, len(expectedBatchCounts), "expected %d batches", len(expectedBatchCounts))
 
 	idx := 0
 	for i, expected := range expectedBatchCounts {
-		if len(batches[i]) != expected {
-			t.Fatalf("batch %d expected size %d, got %d", i, expected, len(batches[i]))
-		}
-
+		require.Lenf(t, batches[i], expected, "batch %d expected size %d", i, expected)
 		for _, datum := range batches[i] {
-			if datum.MetricName != metrics[idx].MetricName {
-				t.Fatalf("metric order mismatch at position %d", idx)
-			}
+			require.Equalf(t, metrics[idx].MetricName, datum.MetricName, "metric order mismatch at position %d", idx)
 			idx++
 		}
 	}
@@ -42,17 +35,11 @@ func TestChunkMetricData_SplitsIntoExpectedBatchSizes(t *testing.T) {
 
 func TestChunkMetricData_HandlesEmptyInput(t *testing.T) {
 	batches, err := chunkMetricData([]types.MetricDatum{}, 5)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	if len(batches) != 0 {
-		t.Fatalf("expected no batches, got %d", len(batches))
-	}
+	require.NoError(t, err)
+	assert.Empty(t, batches)
 }
 
 func TestChunkMetricData_InvalidSize(t *testing.T) {
-	if _, err := chunkMetricData(make([]types.MetricDatum, 1), 0); err == nil {
-		t.Fatalf("expected error for invalid chunk size")
-	}
+	_, err := chunkMetricData(make([]types.MetricDatum, 1), 0)
+	assert.Error(t, err)
 }

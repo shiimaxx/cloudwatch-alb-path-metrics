@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func parseLogEntry(t *testing.T, entry string) []string {
@@ -14,9 +15,7 @@ func parseLogEntry(t *testing.T, entry string) []string {
 	reader := csv.NewReader(strings.NewReader(entry))
 	reader.Comma = ' '
 	fields, err := reader.Read()
-	if err != nil {
-		t.Fatalf("failed to parse log line: %v", err)
-	}
+	require.NoError(t, err, "failed to parse log line")
 	return fields
 }
 
