@@ -69,28 +69,27 @@ func (m *MetricAggregator) GetCloudWatchMetricData() []types.MetricDatum {
 			{Name: aws.String(metricDimensionRoute), Value: aws.String(key.Route)},
 		}
 
-		if len(agg.responseTime) > 0 {
 			values := make([]float64, len(agg.responseTime))
 			counts := make([]float64, len(agg.responseTime))
 			copy(values, agg.responseTime)
+			// TODO(co): group identical samples so counts capture repeats, shrink payloads, and cut API calls.
 			for i := range counts {
 				counts[i] = 1.0
 			}
 
-			metricData = append(metricData, types.MetricDatum{
-				MetricName: aws.String(metricNameResponseTime),
-				Timestamp:  aws.Time(timestamp),
-				Dimensions: cloneDimensions(dimensions),
-				Values:     values,
-				Counts:     counts,
-				Unit:       types.StandardUnitSeconds,
-			})
-		}
+		metricData = append(metricData, types.MetricDatum{
+			MetricName: aws.String(metricNameResponseTime),
+			Timestamp:  aws.Time(timestamp),
+			Dimensions: dimensions,
+			Values:     values,
+			Counts:     counts,
+			Unit:       types.StandardUnitSeconds,
+		})
 
 		metricData = append(metricData, types.MetricDatum{
 			MetricName: aws.String(metricNameRequestCount),
 			Timestamp:  aws.Time(timestamp),
-			Dimensions: cloneDimensions(dimensions),
+			Dimensions: dimensions,
 			Value:      aws.Float64(float64(agg.requestCount)),
 			Unit:       types.StandardUnitCount,
 		})
@@ -98,17 +97,11 @@ func (m *MetricAggregator) GetCloudWatchMetricData() []types.MetricDatum {
 		metricData = append(metricData, types.MetricDatum{
 			MetricName: aws.String(metricNameFailedRequestCount),
 			Timestamp:  aws.Time(timestamp),
-			Dimensions: cloneDimensions(dimensions),
+			Dimensions: dimensions,
 			Value:      aws.Float64(float64(agg.failedRequestCount)),
 			Unit:       types.StandardUnitCount,
 		})
 	}
 
 	return metricData
-}
-
-func cloneDimensions(source []types.Dimension) []types.Dimension {
-	clone := make([]types.Dimension, len(source))
-	copy(clone, source)
-	return clone
 }
