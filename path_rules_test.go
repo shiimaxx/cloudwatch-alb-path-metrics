@@ -45,14 +45,15 @@ func TestNewPathRules_Success(t *testing.T) {
 	assert.Equal(t, "example.com", second.host)
 	assert.Equal(t, "/articles/:slug", second.route)
 	assert.True(t, second.regex.MatchString("/articles/next-gen"))
+	assert.False(t, second.regex.MatchString("/users/42"))
 	assert.Empty(t, second.method)
 }
 
 func TestNewPathRules_EmptyString(t *testing.T) {
 	rules, err := NewPathRules("")
 
-	require.NoError(t, err)
-	require.NotNil(t, rules)
+	assert.NoError(t, err)
+	assert.NotNil(t, rules)
 	assert.False(t, rules.enabled)
 	assert.Empty(t, rules.rules)
 }
@@ -92,7 +93,6 @@ func TestPathRulesNormalize_Match(t *testing.T) {
 	require.NoError(t, err)
 
 	entry := albLogEntry{host: "example.com", path: "/users/42", method: "GET"}
-
 	route, matched := rules.normalize(entry)
 
 	assert.True(t, matched)
@@ -106,7 +106,6 @@ func TestPathRulesNormalize_NoMatch(t *testing.T) {
 	require.NoError(t, err)
 
 	entry := albLogEntry{host: "api.example.com", path: "/users/abc", method: "POST"}
-
 	route, matched := rules.normalize(entry)
 
 	assert.False(t, matched)
@@ -120,7 +119,6 @@ func TestPathRulesNormalize_MethodMismatch(t *testing.T) {
 	require.NoError(t, err)
 
 	entry := albLogEntry{host: "example.com", path: "/users/42", method: "GET"}
-
 	route, matched := rules.normalize(entry)
 
 	assert.False(t, matched)
@@ -131,7 +129,6 @@ func TestPathRulesNormalize_Disabled(t *testing.T) {
 	rules := &PathRules{}
 
 	entry := albLogEntry{host: "example.com", path: "/users/42", method: "GET"}
-
 	route, matched := rules.normalize(entry)
 
 	assert.False(t, matched)

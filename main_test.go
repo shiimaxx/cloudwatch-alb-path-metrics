@@ -23,10 +23,7 @@ func TestValidateCloudWatchNamespace(t *testing.T) {
 	}
 
 	for _, tc := range tests {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
-
 			err := validateCloudWatchNamespace(tc.ns)
 			if tc.wantErr {
 				assert.Error(t, err, "expected error for namespace %q", tc.ns)

@@ -17,19 +17,20 @@ func TestChunkMetricData_SplitsIntoExpectedBatchSizes(t *testing.T) {
 		metrics[i] = types.MetricDatum{MetricName: name}
 	}
 
-	publisher := &CloudWatchMetricPublisher{maxBatchSize: 3}
+	size := 3
+	publisher := &CloudWatchMetricPublisher{maxBatchSize: size}
+
 	batches, err := publisher.chunkMetricData(metrics)
 	require.NoError(t, err)
 
-	expectedBatchCounts := []int{3, 3, 1}
-	require.Lenf(t, batches, len(expectedBatchCounts), "expected %d batches", len(expectedBatchCounts))
+	wantBatchCounts := []int{3, 3, 1}
+	assert.Len(t, batches, len(wantBatchCounts))
 
-	idx := 0
-	for i, expected := range expectedBatchCounts {
-		require.Lenf(t, batches[i], expected, "batch %d expected size %d", i, expected)
-		for _, datum := range batches[i] {
-			require.Equalf(t, metrics[idx].MetricName, datum.MetricName, "metric order mismatch at position %d", idx)
-			idx++
+	for i, want := range wantBatchCounts {
+		assert.Len(t, batches[i], want)
+
+		for j, datum := range batches[i] {
+			assert.Equal(t, metrics[i*size+j].MetricName, datum.MetricName)
 		}
 	}
 }
@@ -37,7 +38,7 @@ func TestChunkMetricData_SplitsIntoExpectedBatchSizes(t *testing.T) {
 func TestChunkMetricData_HandlesEmptyInput(t *testing.T) {
 	publisher := &CloudWatchMetricPublisher{maxBatchSize: 5}
 	batches, err := publisher.chunkMetricData([]types.MetricDatum{})
-	require.NoError(t, err)
+	assert.NoError(t, err)
 	assert.Empty(t, batches)
 }
 
