@@ -82,12 +82,11 @@ func (p *MetricsProcessor) streamObjectLines(ctx context.Context, bucket, key st
 }
 
 func (p *MetricsProcessor) logMetrics(metricData []types.MetricDatum) {
-	expandDimensions := func(dimensions []types.Dimension) []string {
-		var result []string
+	expandDimensions := func(dimensions []types.Dimension) (r []string) {
 		for _, d := range dimensions {
-			result = append(result, fmt.Sprintf("%s=%s", aws.ToString(d.Name), aws.ToString(d.Value)))
+			r = append(r, fmt.Sprintf("%s=%s", aws.ToString(d.Name), aws.ToString(d.Value)))
 		}
-		return result
+		return r
 	}
 
 	for _, data := range metricData {
