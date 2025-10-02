@@ -10,7 +10,7 @@ import (
 )
 
 func TestNewMetricAggregator(t *testing.T) {
-	aggregator := NewMetricAggregator()
+	aggregator := &MetricAggregator{metrics: make(map[metricKey]*metricAggregate)}
 
 	assert.NotNil(t, aggregator)
 	assert.NotNil(t, aggregator.metrics)
@@ -18,7 +18,7 @@ func TestNewMetricAggregator(t *testing.T) {
 }
 
 func TestMetricAggregator_RecordAggregatesMetrics(t *testing.T) {
-	aggregator := NewMetricAggregator()
+	aggregator := &MetricAggregator{metrics: make(map[metricKey]*metricAggregate)}
 
 	route := "/users/:id"
 	time1 := time.Date(2024, 1, 1, 12, 0, 10, 0, time.UTC)
@@ -34,20 +34,20 @@ func TestMetricAggregator_RecordAggregatesMetrics(t *testing.T) {
 	minute1Key := metricKey{Method: "GET", Host: "example.com", Route: route, Minute: time1.Truncate(time.Minute)}
 	minute1Agg, ok := aggregator.metrics[minute1Key]
 	assert.True(t, ok)
-	assert.Equal(t, 1, minute1Agg.successCount)
-	assert.Equal(t, 1, minute1Agg.failedCount)
-	assert.Equal(t, []float64{0.12, 0.34}, minute1Agg.durations)
+	assert.Equal(t, 2, minute1Agg.requestCount)
+	assert.Equal(t, 1, minute1Agg.failedRequestCount)
+	assert.Equal(t, []float64{0.12, 0.34}, minute1Agg.responseTime)
 
 	minute2Key := metricKey{Method: "GET", Host: "example.com", Route: route, Minute: time3.Truncate(time.Minute)}
 	minute2Agg, ok := aggregator.metrics[minute2Key]
 	assert.True(t, ok)
-	assert.Equal(t, 1, minute2Agg.successCount)
-	assert.Equal(t, 0, minute2Agg.failedCount)
-	assert.Equal(t, []float64{0.56}, minute2Agg.durations)
+	assert.Equal(t, 1, minute2Agg.requestCount)
+	assert.Equal(t, 0, minute2Agg.failedRequestCount)
+	assert.Equal(t, []float64{0.56}, minute2Agg.responseTime)
 }
 
 func TestMetricAggregator_GetCloudWatchMetricData(t *testing.T) {
-	aggregator := NewMetricAggregator()
+	aggregator := &MetricAggregator{metrics: make(map[metricKey]*metricAggregate)}
 
 	route := "/check"
 	time1 := time.Date(2024, 2, 1, 8, 0, 10, 0, time.UTC)
@@ -130,7 +130,7 @@ func TestMetricAggregator_GetCloudWatchMetricData(t *testing.T) {
 	assert.Equal(t, minute1, minute1Response.Timestamp.UTC())
 
 	assert.Equal(t, types.StandardUnitCount, minute1RequestCount.Unit)
-	assert.Equal(t, float64(1), *minute1RequestCount.Value)
+	assert.Equal(t, float64(2), *minute1RequestCount.Value)
 	assert.Equal(t, minute1, minute1RequestCount.Timestamp.UTC())
 
 	assert.Equal(t, types.StandardUnitCount, minute1FailedCount.Unit)
@@ -152,7 +152,7 @@ func TestMetricAggregator_GetCloudWatchMetricData(t *testing.T) {
 }
 
 func TestMetricAggregator_GetCloudWatchMetricData_EmptyMetrics(t *testing.T) {
-	aggregator := NewMetricAggregator()
+	aggregator := &MetricAggregator{metrics: make(map[metricKey]*metricAggregate)}
 
 	metricData := aggregator.GetCloudWatchMetricData()
 

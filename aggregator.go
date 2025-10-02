@@ -21,21 +21,14 @@ type metricKey struct {
 }
 
 type metricAggregate struct {
-	durations    []float64
-	successCount int
-	failedCount  int
+	responseTime       []float64
+	requestCount       int
+	failedRequestCount int
 }
 
 // MetricAggregator maintains per method/host/route aggregates convertible to CloudWatch MetricDatum values.
 type MetricAggregator struct {
 	metrics map[metricKey]*metricAggregate
-}
-
-// NewMetricAggregator creates a new MetricAggregator instance.
-func NewMetricAggregator() *MetricAggregator {
-	return &MetricAggregator{
-		metrics: make(map[metricKey]*metricAggregate),
-	}
 }
 
 // Record adds a single request observation to the aggregate identified by the normalized route.
@@ -52,11 +45,10 @@ func (m *MetricAggregator) Record(entry albLogEntry, route string) {
 		m.metrics[key] = agg
 	}
 
-	agg.durations = append(agg.durations, entry.duration)
+	agg.responseTime = append(agg.responseTime, entry.duration)
+	agg.requestCount++
 	if entry.status >= 500 && entry.status <= 599 {
-		agg.failedCount++
-	} else {
-		agg.successCount++
+		agg.failedRequestCount++
 	}
 }
 
@@ -65,11 +57,6 @@ func (m *MetricAggregator) GetCloudWatchMetricData() []types.MetricDatum {
 	var metricData []types.MetricDatum
 
 	for key, agg := range m.metrics {
-		totalRequests := agg.successCount + agg.failedCount
-		if totalRequests == 0 {
-			continue
-		}
-
 		timestamp := key.Minute
 
 		dimensions := []types.Dimension{
@@ -78,10 +65,10 @@ func (m *MetricAggregator) GetCloudWatchMetricData() []types.MetricDatum {
 			{Name: aws.String("Route"), Value: aws.String(key.Route)},
 		}
 
-		if len(agg.durations) > 0 {
-			values := make([]float64, len(agg.durations))
-			counts := make([]float64, len(agg.durations))
-			copy(values, agg.durations)
+		if len(agg.responseTime) > 0 {
+			values := make([]float64, len(agg.responseTime))
+			counts := make([]float64, len(agg.responseTime))
+			copy(values, agg.responseTime)
 			for i := range counts {
 				counts[i] = 1.0
 			}
@@ -100,7 +87,7 @@ func (m *MetricAggregator) GetCloudWatchMetricData() []types.MetricDatum {
 			MetricName: aws.String(metricNameRequestCount),
 			Timestamp:  aws.Time(timestamp),
 			Dimensions: cloneDimensions(dimensions),
-			Value:      aws.Float64(float64(agg.successCount)),
+			Value:      aws.Float64(float64(agg.requestCount)),
 			Unit:       types.StandardUnitCount,
 		})
 
@@ -108,7 +95,7 @@ func (m *MetricAggregator) GetCloudWatchMetricData() []types.MetricDatum {
 			MetricName: aws.String(metricNameFailedRequestCount),
 			Timestamp:  aws.Time(timestamp),
 			Dimensions: cloneDimensions(dimensions),
-			Value:      aws.Float64(float64(agg.failedCount)),
+			Value:      aws.Float64(float64(agg.failedRequestCount)),
 			Unit:       types.StandardUnitCount,
 		})
 	}
