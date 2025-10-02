@@ -60,10 +60,7 @@ func (p *CloudWatchMetricPublisher) chunkMetricData(data []types.MetricDatum) ([
 
 	batches := make([][]types.MetricDatum, 0, (len(data)+size-1)/size)
 	for start := 0; start < len(data); start += size {
-		end := start + size
-		if end > len(data) {
-			end = len(data)
-		}
+		end := min(start+size, len(data))
 		batches = append(batches, data[start:end])
 	}
 
