@@ -11,6 +11,10 @@ const (
 	metricNameResponseTime       = "ResponseTime"
 	metricNameRequestCount       = "RequestCount"
 	metricNameFailedRequestCount = "FailedRequestCount"
+
+	metricDimensionMethod = "Method"
+	metricDimensionHost   = "Host"
+	metricDimensionRoute  = "Route"
 )
 
 type metricKey struct {
@@ -60,9 +64,9 @@ func (m *MetricAggregator) GetCloudWatchMetricData() []types.MetricDatum {
 		timestamp := key.Minute
 
 		dimensions := []types.Dimension{
-			{Name: aws.String("Method"), Value: aws.String(key.Method)},
-			{Name: aws.String("Host"), Value: aws.String(key.Host)},
-			{Name: aws.String("Route"), Value: aws.String(key.Route)},
+			{Name: aws.String(metricDimensionMethod), Value: aws.String(key.Method)},
+			{Name: aws.String(metricDimensionHost), Value: aws.String(key.Host)},
+			{Name: aws.String(metricDimensionRoute), Value: aws.String(key.Route)},
 		}
 
 		if len(agg.responseTime) > 0 {
