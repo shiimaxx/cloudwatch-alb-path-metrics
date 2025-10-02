@@ -69,13 +69,13 @@ func (m *MetricAggregator) GetCloudWatchMetricData() []types.MetricDatum {
 			{Name: aws.String(metricDimensionRoute), Value: aws.String(key.Route)},
 		}
 
-			values := make([]float64, len(agg.responseTime))
-			counts := make([]float64, len(agg.responseTime))
-			copy(values, agg.responseTime)
-			// TODO(co): group identical samples so counts capture repeats, shrink payloads, and cut API calls.
-			for i := range counts {
-				counts[i] = 1.0
-			}
+		values := make([]float64, len(agg.responseTime))
+		counts := make([]float64, len(agg.responseTime))
+		copy(values, agg.responseTime)
+		// TODO(co): group identical samples so counts capture repeats, shrink payloads, and cut API calls.
+		for i := range counts {
+			counts[i] = 1.0
+		}
 
 		metricData = append(metricData, types.MetricDatum{
 			MetricName: aws.String(metricNameResponseTime),
