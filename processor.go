@@ -82,6 +82,14 @@ func (p *MetricsProcessor) streamObjectLines(ctx context.Context, bucket, key st
 }
 
 func (p *MetricsProcessor) logMetrics(metricData []types.MetricDatum) {
+	expandDimensions := func(dimensions []types.Dimension) []string {
+		var result []string
+		for _, d := range dimensions {
+			result = append(result, fmt.Sprintf("%s=%s", aws.ToString(d.Name), aws.ToString(d.Value)))
+		}
+		return result
+	}
+
 	for _, data := range metricData {
 		if data.MetricName == nil {
 			continue
@@ -91,7 +99,7 @@ func (p *MetricsProcessor) logMetrics(metricData []types.MetricDatum) {
 		case metricNameResponseTime:
 			fmt.Printf("Metric: %s, Dimensions: %v, Timestamp: %v, Values: %v, Counts: %v\n",
 				aws.ToString(data.MetricName),
-				data.Dimensions,
+				expandDimensions(data.Dimensions),
 				data.Timestamp,
 				data.Values,
 				data.Counts,
@@ -99,7 +107,7 @@ func (p *MetricsProcessor) logMetrics(metricData []types.MetricDatum) {
 		case metricNameRequestCount, metricNameFailedRequestCount:
 			fmt.Printf("Metric: %s, Dimensions: %v, Timestamp: %v, Value: %v\n",
 				aws.ToString(data.MetricName),
-				data.Dimensions,
+				expandDimensions(data.Dimensions),
 				data.Timestamp,
 				aws.ToFloat64(data.Value),
 			)
