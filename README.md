@@ -18,8 +18,9 @@ AWS-native tooling does not surface path-level metrics out of the box; you must 
 
 | Variable | Description | Required | Example |
 |----------|-------------|----------|---------|
-| `NAMESPACE` | CloudWatch custom metrics namespace | Yes | `MyApplication/ALB` |
 | `INCLUDE_PATH_RULES` | JSON array describing host-aware path normalization rules | No | `[{"host":"example.com","path":"^/users/[0-9]+$","route":"/users/:id"}]` |
+
+The function publishes metrics under the CloudWatch namespace `cloudwatch-alb-path-metrics`.
 
 ### Path Rules
 
