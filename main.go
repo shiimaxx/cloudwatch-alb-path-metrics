@@ -12,8 +12,6 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 )
 
-const defaultCloudWatchNamespace = "ALBAccessLog"
-
 func handler(ctx context.Context, s3Event events.S3Event) error {
 	rules, err := NewPathRules(os.Getenv("INCLUDE_PATH_RULES"))
 	if err != nil {
@@ -31,7 +29,7 @@ func handler(ctx context.Context, s3Event events.S3Event) error {
 		aggregator: &MetricAggregator{metrics: make(map[metricKey]*metricAggregate)},
 		publisher: &CloudWatchMetricPublisher{
 			client:       cloudwatch.NewFromConfig(cfg),
-			namespace:    defaultCloudWatchNamespace,
+			namespace:    "ALBAccessLog",
 			maxBatchSize: defaultMetricBatchSize,
 		},
 	}
