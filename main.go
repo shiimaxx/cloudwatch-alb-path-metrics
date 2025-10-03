@@ -12,7 +12,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 )
 
-const defaultCloudWatchNamespace = "cloudwatch-alb-path-metrics"
+const defaultCloudWatchNamespace = "ALBAccessLog"
 
 func handler(ctx context.Context, s3Event events.S3Event) error {
 	rules, err := NewPathRules(os.Getenv("INCLUDE_PATH_RULES"))
