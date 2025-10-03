@@ -26,10 +26,12 @@ type albLogEntry struct {
 // "actions_executed" "redirect_url" "error_reason" "target:port_list" "target_status_code_list"
 // "classification" "classification_reason" conn_trace_id
 const (
-	timestampFieldIndex = 1
-	durationFieldIndex  = 6
-	statusFieldIndex    = 8
-	requestFieldIndex   = 12
+	timestampFieldIndex              = 1
+	requestProcessingTimeFieldIndex  = 5
+	targetProcessingTimeFieldIndex   = 6
+	responseProcessingTimeFieldIndex = 7
+	statusFieldIndex                 = 8
+	requestFieldIndex                = 12
 )
 
 func parseALBLogFields(fields []string) (*albLogEntry, error) {
@@ -48,10 +50,22 @@ func parseALBLogFields(fields []string) (*albLogEntry, error) {
 		return nil, errors.New("failed to parse status: " + err.Error())
 	}
 
-	duration, err := strconv.ParseFloat(fields[durationFieldIndex], 64)
+	requestProcessingTime, err := strconv.ParseFloat(fields[requestProcessingTimeFieldIndex], 64)
 	if err != nil {
-		return nil, errors.New("failed to parse duration: " + err.Error())
+		return nil, errors.New("failed to parse request processing time: " + err.Error())
 	}
+
+	targetProcessingTime, err := strconv.ParseFloat(fields[targetProcessingTimeFieldIndex], 64)
+	if err != nil {
+		return nil, errors.New("failed to parse target processing time: " + err.Error())
+	}
+
+	responseProcessingTime, err := strconv.ParseFloat(fields[responseProcessingTimeFieldIndex], 64)
+	if err != nil {
+		return nil, errors.New("failed to parse response processing time: " + err.Error())
+	}
+
+	duration := requestProcessingTime + targetProcessingTime + responseProcessingTime
 
 	requestParts := strings.Fields(fields[requestFieldIndex])
 	if len(requestParts) < 3 {
