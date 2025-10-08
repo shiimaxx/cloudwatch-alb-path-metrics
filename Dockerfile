@@ -1,4 +1,4 @@
-FROM golang:1.25.1 as builder
+FROM golang:1.25 as builder
 
 WORKDIR /src
 
@@ -14,3 +14,4 @@ FROM public.ecr.aws/lambda/provided:al2
 COPY --from=builder /src/bootstrap ${LAMBDA_RUNTIME_DIR}/
 
 CMD ["bootstrap"]
+
