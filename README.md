@@ -74,3 +74,14 @@ Invoke the function with a test event:
 ```
 BUCKET=my-alb-logs-bucket KEY=path/to/logfile.log script/invoke.sh
 ```
+
+Another option is to run the function locally using Docker:
+```
+# Build and run the Docker image
+docker build -t cloudwatch-alb-path-metrics .
+INCLUDE_PATH_RULES='[{"host":"example.com","method":"GET","path":"^/users/[0-9]+$","route":"/users/:id"}]' scripts/run-local.sh
+
+# Invoke the function with a test event
+BUCKET=my-alb-logs-bucket KEY=path/to/logfile.log scripts/invoke-local.sh
+```
+
