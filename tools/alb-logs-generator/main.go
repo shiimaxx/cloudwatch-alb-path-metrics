@@ -15,7 +15,6 @@ func main() {
 	seedFlag := flag.Int64("seed", time.Now().UnixNano(), "seed for synthetic data generation")
 	countFlag := flag.Int("count", 0, "number of log entries to emit (default: derived from --rps)")
 	rpsFlag := flag.Float64("rps", defaultRPS, "average requests per second over the five-minute window")
-	startFlag := flag.String("start", "", "start time (RFC3339) for the five-minute window; defaults to now minus five minutes")
 	flag.Parse()
 
 	if *countFlag == 0 && *rpsFlag <= 0 {
@@ -25,7 +24,7 @@ func main() {
 		log.Fatalf("count must be non-negative: %d", *countFlag)
 	}
 
-	startTime := resolveStartTime(*startFlag)
+	startTime := time.Now().UTC().Add(-windowDuration)
 	entryCount := resolveEntryCount(*countFlag, *rpsFlag)
 
 	fakerSource := rand.NewSource(*seedFlag)

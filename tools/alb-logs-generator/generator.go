@@ -32,18 +32,6 @@ func generateEntries(count int, start time.Time, rng *rand.Rand) []albLogEntry {
 	return entries
 }
 
-func resolveStartTime(startFlag string) time.Time {
-	if startFlag == "" {
-		return time.Now().UTC().Add(-windowDuration)
-	}
-
-	startTime, err := time.Parse(time.RFC3339, startFlag)
-	if err != nil {
-		log.Fatalf("invalid start timestamp %q: %v", startFlag, err)
-	}
-	return startTime
-}
-
 func resolveEntryCount(count int, rps float64) int {
 	if count > 0 {
 		return count
