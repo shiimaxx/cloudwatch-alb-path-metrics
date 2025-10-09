@@ -4,24 +4,28 @@ import (
 	"fmt"
 	"log"
 	"math/rand"
+	"reflect"
 	"strings"
 
 	"github.com/go-faker/faker/v4"
 )
 
+const (
+	tagTargetGroupArn     = "aws_target_group_arn"
+	tagChosenCertArn      = "aws_chosen_cert_arn"
+	defaultTargetGroupArn = "arn:aws:elasticloadbalancing:us-east-1:123456789012:targetgroup/tg-main/aaaabbbbccccdddd"
+	defaultChosenCertArn  = "arn:aws:acm:us-east-1:123456789012:certificate/cert-1234abcd"
+)
+
 var (
-	targetGroupARNs = []string{
-		"arn:aws:elasticloadbalancing:us-east-1:123456789012:targetgroup/tg-main/aaaabbbbccccdddd",
-		"arn:aws:elasticloadbalancing:us-west-2:210987654321:targetgroup/tg-blue/bbbbccccddddeeee",
-	}
-	chosenCertARNs = []string{
-		"-",
-		"arn:aws:acm:us-east-1:123456789012:certificate/cert-1234abcd",
-		"arn:aws:acm:us-west-2:210987654321:certificate/cert-5678efgh",
-	}
 	httpListenerPorts  = []int{80, 8080}
 	httpsListenerPorts = []int{443, 8443}
 )
+
+func init() {
+	registerConstantProvider(tagTargetGroupArn, defaultTargetGroupArn)
+	registerConstantProvider(tagChosenCertArn, defaultChosenCertArn)
+}
 
 type entryTemplate struct {
 	ClientIP                  string `faker:"ipv4"`
@@ -50,8 +54,8 @@ type entryTemplate struct {
 	ClassificationReason      string `faker:"oneof:-,waf-blocked,rule-match"`
 	SSLCipher                 string `faker:"oneof:-,ECDHE-RSA-AES128-GCM-SHA256,ECDHE-RSA-AES256-GCM-SHA384,ECDHE-ECDSA-AES128-GCM-SHA256"`
 	SSLProtocol               string `faker:"oneof:-,TLSv1.2,TLSv1.3"`
-	ChosenCertArn             string `faker:"-"`
-	TargetGroupArn            string `faker:"-"`
+	ChosenCertArn             string `faker:"aws_chosen_cert_arn"`
+	TargetGroupArn            string `faker:"aws_target_group_arn"`
 	TraceID                   string `faker:"oneof:Root=1-5f84c3aa-1aa2bb3cc4dd5ee6ff778899"`
 }
 
@@ -60,13 +64,19 @@ func newEntryTemplate(rng *rand.Rand) entryTemplate {
 	if err := faker.FakeData(&template); err != nil {
 		log.Fatalf("faker failed to populate entry template: %v", err)
 	}
-	template.TargetGroupArn = randomChoice(rng, targetGroupARNs)
-	template.ChosenCertArn = randomChoice(rng, chosenCertARNs)
 	template.ListenerPort = listenerPortForType(template.Type, rng)
 	template.RequestProcessingSeconds = randomSeconds(rng, 0.00001, 0.015)
 	template.TargetProcessingSeconds = randomSeconds(rng, 0.001, 0.6)
 	template.ResponseProcessingSeconds = randomSeconds(rng, 0.00005, 0.05)
 	return template
+}
+
+func registerConstantProvider(tag, value string) {
+	if err := faker.AddProvider(tag, func(reflect.Value) (interface{}, error) {
+		return value, nil
+	}); err != nil {
+		log.Fatalf("failed to register faker provider %s: %v", tag, err)
+	}
 }
 
 func randomChoice[T any](rng *rand.Rand, options []T) T {
