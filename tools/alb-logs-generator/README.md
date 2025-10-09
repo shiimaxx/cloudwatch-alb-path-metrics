@@ -12,11 +12,11 @@ A command-line utility that emits synthetic AWS Application Load Balancer (ALB) 
 - Synthetic values rely on [`go-faker/faker/v4`](https://github.com/go-faker/faker) for items such as IPv4 addresses and user agents. Additional helper functions supply weighted selections for HTTP methods, paths, status codes, and random-but-realistic latencies using `math/rand` seeded via `--seed` (default: `time.Now().UnixNano()`).
 - CLI flags include `--output` (defaults to stdout), `--alb-name`, `--target`, `--rps`, `--count`, `--start`, and `--seed`. Output streaming is handled through an `io.Writer` abstraction using a buffered writer so large log sets do not accumulate in memory.
 
-## Incremental Implementation Plan
+## ToDo
 
-1. **Skeleton CLI**: Wire up `main.go` with basic flag parsing (`--output`, `--seed`) and emit a single placeholder log line to validate wiring via `go run`.
-2. **Randomization & Entry Skeleton**: Initialize the faker-based random source, define the `albLogEntry` structure with essential fields (timestamp, client/target addresses, request line), and generate a small fixed set (e.g., 10) of entries for smoke testing.
-3. **Five-Minute Window Logic**: Introduce `--start`, `--rps`, and `--count` handling. Compute the five-minute range (300 seconds), assign timestamps across that range with optional jitter, and confirm entry counts through manual runs.
-4. **Complete ALB Schema**: Populate the remaining ALB log fields, ensure formatting order matches the ALB documentation, and expand helper functions for processing times, status codes, byte counts, actions, and other metadata.
-5. **Refinement & Docs**: Add robust error handling, wrap output in a `bufio.Writer`, update usage notes in `README.md`, run `go fmt`, and capture sample output for verification.
+- [ ] Quote the trailing string columns (`actions_executed`, `redirect_url`, `error_reason`, `target_port_list`, `target_status_code_list`, `classification`, `classification_reason`) to match the quoting style of real ALB access logs.
+- [ ] Build the request line host/port using the listener (client-facing) port instead of the target port so generated URLs mirror actual ALB logs.
+- [ ] Output `-` for target-related fields when the action is `redirect`, `fixed-response`, `authenticate`, or `waf`, because no target is contacted in those cases in production logs.
+- [ ] Ensure `request_creation_time` plus the three processing time fields align with the entry timestamp, preserving the timing invariant observed in ALB logs.
+- [ ] Format `target_port_list` and `target_status_code_list` as quoted lists (or `"-"` when untouched) to mimic the structure of AWS’ real log lines.
 

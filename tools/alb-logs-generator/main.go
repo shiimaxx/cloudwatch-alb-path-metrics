@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"flag"
 	"fmt"
 	"log"
@@ -120,10 +121,17 @@ func main() {
 	dataRand := rand.New(rand.NewSource(*seedFlag))
 
 	entries := generateEntries(entryCount, startTime, dataRand)
+	writer := bufio.NewWriter(os.Stdout)
 	for _, entry := range entries {
-		if _, err := fmt.Fprintln(os.Stdout, entry.String()); err != nil {
+		if _, err := writer.WriteString(entry.String()); err != nil {
 			log.Fatalf("failed to write log entry: %v", err)
 		}
+		if err := writer.WriteByte('\n'); err != nil {
+			log.Fatalf("failed to write newline: %v", err)
+		}
+	}
+	if err := writer.Flush(); err != nil {
+		log.Fatalf("failed to flush output: %v", err)
 	}
 }
 
