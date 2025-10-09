@@ -20,8 +20,8 @@ func main() {
 	}
 
 	gen := Generator{
-		irrelevant: NewIrrelevantGenerator(),
-		relevant:   NewRelevantGenerator(),
+		Irrelevant: NewIrrelevantGenerator(),
+		Relevant:   NewRelevantGenerator(),
 	}
 
 	if _, err := gen.GenerateEntries(count, time.Now().UTC()); err != nil {

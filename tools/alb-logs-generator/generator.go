@@ -15,8 +15,8 @@ type RelevantInput struct {
 
 // Generator orchestrates irrelevant and relevant field generators.
 type Generator struct {
-	irrelevant *IrrelevantGenerator
-	relevant   *RelevantGenerator
+	Irrelevant *IrrelevantGenerator
+	Relevant   *RelevantGenerator
 }
 
 // GenerateEntries returns skeleton log entries.
