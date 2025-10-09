@@ -30,6 +30,8 @@ var (
 		"arn:aws:acm:us-east-1:123456789012:certificate/cert-1234abcd",
 		"arn:aws:acm:us-west-2:210987654321:certificate/cert-5678efgh",
 	}
+	httpListenerPorts  = []int{80, 8080}
+	httpsListenerPorts = []int{443, 8443}
 )
 
 type albLogEntry struct {
@@ -184,6 +186,7 @@ func newEntryTemplate(rng *rand.Rand) entryTemplate {
 	}
 	template.TargetGroupArn = randomChoice(rng, targetGroupARNs)
 	template.ChosenCertArn = randomChoice(rng, chosenCertARNs)
+	template.ListenerPort = listenerPortForType(template.Type, rng)
 	return template
 }
 
@@ -192,6 +195,7 @@ type entryTemplate struct {
 	TargetIP                    string `faker:"ipv4"`
 	ClientPort                  int    `faker:"boundary_start=1024, boundary_end=65535"`
 	TargetPort                  int    `faker:"oneof:80,443,8080,9000"`
+	ListenerPort                int
 	Method                      string `faker:"oneof:GET,POST,PUT,PATCH,DELETE"`
 	Path                        string `faker:"oneof:/,/health,/login,/logout,/api/orders,/api/users,/static/css/main.css"`
 	UserAgent                   string `faker:"user_agent"`
@@ -224,6 +228,13 @@ func randomChoice[T any](rng *rand.Rand, options []T) T {
 		log.Fatal("randomChoice called with empty options")
 	}
 	return options[rng.Intn(len(options))]
+}
+
+func listenerPortForType(scheme string, rng *rand.Rand) int {
+	if scheme == "https" {
+		return randomChoice(rng, httpsListenerPorts)
+	}
+	return randomChoice(rng, httpListenerPorts)
 }
 
 func buildLogEntry(template entryTemplate, timestamp time.Time) albLogEntry {
@@ -291,7 +302,14 @@ func buildLogEntry(template entryTemplate, timestamp time.Time) albLogEntry {
 
 func buildRequestLine(template entryTemplate) string {
 	scheme := template.Type
-	port := template.TargetPort
+	port := template.ListenerPort
+	if port == 0 {
+		if scheme == "https" {
+			port = 443
+		} else {
+			port = 80
+		}
+	}
 	hostPort := fmt.Sprintf("%s:%d", template.DomainName, port)
 	return fmt.Sprintf("%s %s://%s%s HTTP/1.1", template.Method, scheme, hostPort, template.Path)
 }
