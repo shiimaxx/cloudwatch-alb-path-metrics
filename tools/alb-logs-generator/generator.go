@@ -15,16 +15,16 @@ const (
 )
 
 func generateEntries(count int, start time.Time, rng *rand.Rand) []albLogEntry {
-	entries := make([]albLogEntry, 0, count)
-	windowNanos := windowDuration.Nanoseconds()
-	var step int64
+	var step time.Duration
 	if count > 1 {
-		step = windowNanos / int64(count-1)
+		step = windowDuration / time.Duration(count-1)
 	}
 
+	entries := make([]albLogEntry, 0, count)
 	for i := range count {
-		offset := time.Duration(step * int64(i))
+		offset := step * time.Duration(i)
 		timestamp := start.Add(offset)
+
 		template := newEntryTemplate(rng)
 		entries = append(entries, buildLogEntry(template, timestamp))
 	}

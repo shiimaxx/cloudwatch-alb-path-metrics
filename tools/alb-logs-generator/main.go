@@ -32,6 +32,7 @@ func main() {
 
 	entries := generateEntries(entryCount, startTime, dataRand)
 	writer := bufio.NewWriter(os.Stdout)
+
 	for i, entry := range entries {
 		if _, err := writer.WriteString(entry.String()); err != nil {
 			log.Fatalf("failed to write log entry: %v", err)
