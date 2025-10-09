@@ -27,8 +27,7 @@ func main() {
 	startTime := time.Now().UTC().Add(-windowDuration)
 	entryCount := resolveEntryCount(*countFlag, *rpsFlag)
 
-	fakerSource := rand.NewSource(*seedFlag)
-	faker.SetRandomSource(faker.NewSafeSource(fakerSource))
+	faker.SetRandomSource(faker.NewSafeSource(rand.NewSource(*seedFlag)))
 	dataRand := rand.New(rand.NewSource(*seedFlag))
 
 	entries := generateEntries(entryCount, startTime, dataRand)
