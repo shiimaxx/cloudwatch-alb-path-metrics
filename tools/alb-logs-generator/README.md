@@ -14,7 +14,7 @@ A command-line utility that emits synthetic AWS Application Load Balancer (ALB) 
 
 ## ToDo
 
-- [ ] Quote the trailing string columns (`actions_executed`, `redirect_url`, `error_reason`, `target_port_list`, `target_status_code_list`, `classification`, `classification_reason`) to match the quoting style of real ALB access logs.
+- [x] Quote the trailing string columns (`actions_executed`, `redirect_url`, `error_reason`, `target_port_list`, `target_status_code_list`, `classification`, `classification_reason`) to match the quoting style of real ALB access logs.
 - [ ] Build the request line host/port using the listener (client-facing) port instead of the target port so generated URLs mirror actual ALB logs.
 - [ ] Output `-` for target-related fields when the action is `redirect`, `fixed-response`, `authenticate`, or `waf`, because no target is contacted in those cases in production logs.
 - [ ] Ensure `request_creation_time` plus the three processing time fields align with the entry timestamp, preserving the timing invariant observed in ALB logs.

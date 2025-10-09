@@ -66,7 +66,7 @@ type albLogEntry struct {
 
 func (e albLogEntry) String() string {
 	return fmt.Sprintf(
-		"%s %s %s %s %s %.6f %.6f %.6f %d %d %d %d %q %q %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s",
+		"%s %s %s %s %s %.6f %.6f %.6f %d %d %d %d %q %q %s %s %s %q %q %q %s %s %q %q %q %q %q %q %q",
 		e.Type,
 		e.Timestamp.Format(logTimeFormat),
 		e.ELB,
