@@ -4,6 +4,7 @@ import (
 	"flag"
 	"fmt"
 	"log"
+	"math"
 	"math/rand"
 	"os"
 	"time"
@@ -12,8 +13,10 @@ import (
 )
 
 const (
-	defaultEntryCount = 10
-	logTimeFormat     = time.RFC3339
+	defaultRPS     = 10.0
+	logTimeFormat  = time.RFC3339
+	windowDuration = 5 * time.Minute
+	windowSeconds  = 300
 )
 
 type albLogEntry struct {
@@ -29,17 +32,24 @@ func (e albLogEntry) String() string {
 
 func main() {
 	seedFlag := flag.Int64("seed", time.Now().UnixNano(), "seed for synthetic data generation")
-	countFlag := flag.Int("count", defaultEntryCount, "number of log entries to emit")
+	countFlag := flag.Int("count", 0, "number of log entries to emit (default: derived from --rps)")
+	rpsFlag := flag.Float64("rps", defaultRPS, "average requests per second over the five-minute window")
+	startFlag := flag.String("start", "", "start time (RFC3339) for the five-minute window; defaults to now minus five minutes")
 	flag.Parse()
 
-	if *countFlag <= 0 {
-		log.Fatalf("count must be positive: %d", *countFlag)
+	if *countFlag == 0 && *rpsFlag <= 0 {
+		log.Fatalf("rps must be positive when count is not specified: %.2f", *rpsFlag)
+	}
+	if *countFlag < 0 {
+		log.Fatalf("count must be non-negative: %d", *countFlag)
 	}
 
-	rng := rand.New(rand.NewSource(*seedFlag))
+	startTime := resolveStartTime(*startFlag)
+	entryCount := resolveEntryCount(*countFlag, *rpsFlag)
+
 	faker.SetRandomSource(faker.NewSafeSource(rand.NewSource(*seedFlag)))
 
-	entries := generateEntries(*countFlag, time.Now().UTC(), rng)
+	entries := generateEntries(entryCount, startTime)
 	for _, entry := range entries {
 		if _, err := fmt.Fprintln(os.Stdout, entry.String()); err != nil {
 			log.Fatalf("failed to write log entry: %v", err)
@@ -47,22 +57,52 @@ func main() {
 	}
 }
 
-func generateEntries(count int, anchor time.Time, rng *rand.Rand) []albLogEntry {
+func generateEntries(count int, start time.Time) []albLogEntry {
 	entries := make([]albLogEntry, 0, count)
-	start := anchor.Add(-time.Duration(count) * 500 * time.Millisecond)
+	windowNanos := windowDuration.Nanoseconds()
+	var step int64
+	if count > 1 {
+		step = windowNanos / int64(count-1)
+	}
 
 	for i := range count {
-		timestamp := start.Add(time.Duration(i)*500*time.Millisecond + time.Duration(rng.Intn(250))*time.Millisecond)
+		offset := time.Duration(step * int64(i))
+		timestamp := start.Add(offset)
 		template := newEntryTemplate()
-		entries = append(entries, albLogEntry{
+		next := albLogEntry{
 			Timestamp:   timestamp,
 			ClientAddr:  fmt.Sprintf("%s:%d", template.ClientIP, template.ClientPort),
 			TargetAddr:  fmt.Sprintf("%s:%d", template.TargetIP, template.TargetPort),
 			RequestLine: buildRequestLine(template),
-		})
+		}
+		entries = append(entries, next)
 	}
 
 	return entries
+}
+
+func resolveStartTime(startFlag string) time.Time {
+	if startFlag == "" {
+		return time.Now().UTC().Add(-windowDuration)
+	}
+
+	startTime, err := time.Parse(time.RFC3339, startFlag)
+	if err != nil {
+		log.Fatalf("invalid start timestamp %q: %v", startFlag, err)
+	}
+	return startTime
+}
+
+func resolveEntryCount(count int, rps float64) int {
+	if count > 0 {
+		return count
+	}
+
+	derived := int(math.Round(rps * windowSeconds))
+	if derived <= 0 {
+		log.Fatalf("derived entry count must be positive (rps=%.2f)", rps)
+	}
+	return derived
 }
 
 func newEntryTemplate() entryTemplate {
