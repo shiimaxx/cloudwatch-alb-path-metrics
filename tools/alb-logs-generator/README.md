@@ -12,3 +12,7 @@ A command-line utility that emits synthetic AWS Application Load Balancer (ALB) 
 - `IrrelevantFields` uses [`go-faker/faker/v4`](https://github.com/go-faker/faker) tags to synthesize the static pieces (client and target addresses, byte counts, IDs, user agents, SSL metadata, etc.) without custom logic. A separate `RelevantFieldGenerator` produces the `RelevantFields`, leaving room to enforce constraints across the latency timings and status codes as scenarios become more sophisticated.
 - Request lines are assembled from caller-supplied host and path candidates so traffic patterns can be tailored per run. Weighted selections retain the existing support for HTTP verbs, status distributions, and latency jitter via `math/rand` seeded with `--seed` (default: `time.Now().UnixNano()`).
 - CLI flags currently include `--rps` and `--count`; output always streams to stdout via a buffered `io.Writer` so large log sets do not accumulate in memory.
+
+## Verification
+
+- Run `go run .` from this directory to confirm the tool builds and executes.
