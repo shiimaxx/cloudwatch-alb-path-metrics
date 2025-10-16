@@ -1,6 +1,6 @@
 #!/bin/bash
 
-GOOS=linux GOARCH=arm64 go build -tags lambda.norpc -o dist/bootstrap ./...
+GOOS=linux GOARCH=arm64 go build -tags lambda.norpc -o dist/bootstrap cmd/cloudwatch-alb-path-metrics/main.go
 cd dist
 zip cloudwatch-alb-path-metrics.zip bootstrap
 
