@@ -10,41 +10,6 @@ import (
 	"github.com/go-faker/faker/v4"
 )
 
-type FakeALBLogFields struct {
-	Type                   string  `faker:"oneof: https"`
-	Time                   string  `faker:"custom_alb_time"`
-	ELB                    string  `faker:"oneof: app/prod-alb/50dc6c495c0c9188"`
-	ClientIP               string  `faker:"ipv4"`
-	ClientPort             int     `faker:"boundary_start=1024, boundary_end=65535"`
-	TargetIP               string  `faker:"oneof: 192.0.2.10, 192.0.2.11, 192.0.2.12"`
-	TargetPort             string  `faker:"oneof: 8080"`
-	TargetProcessingTime   float64 `faker:"boundary_start=0.5, boundary_end=1.0"`
-	ResponseProcessingTime float64 `faker:"boundary_start=0.5, boundary_end=1.0"`
-	ELBStatusCode          int     `faker:"oneof: 200"`
-	TargetStatusCode       int     `faker:"oneof: 200"`
-	ReceivedBytes          int     `faker:"oneof: 0, 100, 500, 1000, 2000, 5000"`
-	SentBytes              int     `faker:"oneof: 0, 500, 1000, 5000, 10000, 50000"`
-	Request                string  `faker:"custom_alb_request"`
-	UserAgent              string  `faker:"user_agent"`
-	SSLCipher              string  `faker:"oneof: ECDHE-RSA-AES128-GCM-SHA256, ECDHE-RSA-AES256-GCM-SHA384, TLS_AES_128_GCM_SHA256"`
-	SSLProtocol            string  `faker:"oneof: TLSv1.2, TLSv1.3"`
-	TargetGroupARN         string  `faker:"-"`
-	TraceID                string  `faker:"oneof: -, Root=1-65ab2d3c4f5e6a7b8c9d012;Parent=0000000000000000;Sampled=1"`
-	DomainName             string  `faker:"oneof: -, www.example.com, admin.example.com"`
-	ChosenCertARN          string  `faker:"-"`
-	MatchedRulePriority    string  `faker:"oneof: 0, 1, 10, 100, 1000"`
-	RequestCreationTime    string  `faker:"timestamp"`
-	ActionsExecuted        string  `faker:"oneof: -"`
-	RedirectURL            string  `faker:"oneof: -"`
-	ErrorReason            string  `faker:"oneof: -"`
-	TargetIPList           string  `faker:"oneof: 192.0.2.10, 192.0.2.11, 192.0.2.12"`
-	TargetPortList         int     `faker:"oneof: 8080"`
-	TargetStatusCodeList   int     `faker:"oneof: 200, 201, 204, 400, 500"`
-	Classification         string  `faker:"oneof: -"`
-	ClassificationReason   string  `faker:"oneof: -"`
-	ConnTraceID            string  `faker:"uuid_hyphenated"`
-}
-
 var startTime = time.Now().UTC().Add(-5 * time.Minute)
 var flagCount int
 
@@ -76,40 +41,77 @@ func init() {
 	flag.Parse()
 }
 
-func buildALBLogLine(entry FakeALBLogFields) string {
-	return fmt.Sprintf(`%s %s %s:%d %s:%s %.6f %.6f %.6f %d %d %d %d "%s" "%s" %s %s %s "%s" "%s" %s %s "%s" "%s" %s %s "%s" "%d" %d %s "%s" "%s"`,
-		entry.Type,
-		entry.Time,
-		entry.ClientIP,
-		entry.ClientPort,
-		entry.TargetIP,
-		entry.TargetPort,
-		entry.TargetProcessingTime,
-		entry.ResponseProcessingTime,
-		entry.TargetProcessingTime+entry.ResponseProcessingTime,
-		entry.ELBStatusCode,
-		entry.TargetStatusCode,
-		entry.ReceivedBytes,
-		entry.SentBytes,
-		entry.Request,
-		entry.UserAgent,
-		entry.SSLCipher,
-		entry.SSLProtocol,
-		entry.TargetGroupARN,
-		entry.TraceID,
-		entry.DomainName,
-		entry.ChosenCertARN,
-		entry.MatchedRulePriority,
-		entry.RequestCreationTime,
-		entry.ActionsExecuted,
-		entry.RedirectURL,
-		entry.ErrorReason,
-		entry.TargetIPList,
-		entry.TargetPortList,
-		entry.TargetStatusCodeList,
-		entry.Classification,
-		entry.ClassificationReason,
-		entry.ConnTraceID,
+type FakeALBLogFields struct {
+	Type                   string  `faker:"oneof: https"`
+	Time                   string  `faker:"custom_alb_time"`
+	ELB                    string  `faker:"oneof: app/prod-alb/50dc6c495c0c9188"`
+	ClientIP               string  `faker:"ipv4"`
+	ClientPort             int     `faker:"boundary_start=1024, boundary_end=65535"`
+	TargetIP               string  `faker:"oneof: 192.0.2.10, 192.0.2.11, 192.0.2.12"`
+	TargetPort             string  `faker:"oneof: 8080"`
+	RequestProcessingTime  float64 `faker:"boundary_start=0.5, boundary_end=1.0"`
+	TargetProcessingTime   float64 `faker:"boundary_start=0.5, boundary_end=1.0"`
+	ResponseProcessingTime float64 `faker:"boundary_start=0.5, boundary_end=1.0"`
+	ELBStatusCode          int     `faker:"oneof: 200"`
+	TargetStatusCode       int     `faker:"oneof: 200"`
+	ReceivedBytes          int     `faker:"oneof: 0, 100, 500, 1000, 2000, 5000"`
+	SentBytes              int     `faker:"oneof: 0, 500, 1000, 5000, 10000, 50000"`
+	Request                string  `faker:"custom_alb_request"`
+	UserAgent              string  `faker:"user_agent"`
+	SSLCipher              string  `faker:"oneof: ECDHE-RSA-AES128-GCM-SHA256"`
+	SSLProtocol            string  `faker:"oneof: TLSv1.2, TLSv1.3"`
+	TargetGroupARN         string  `faker:"custom_alb_target_group_arn"`
+	TraceID                string  `faker:"oneof: Root=1-58337281-1d84f3d73c47ec4e58577259"`
+	DomainName             string  `faker:"oneof: www.example.com, admin.example.com"`
+	ChosenCertARN          string  `faker:"custom_alb_chosen_cert_arn"`
+	MatchedRulePriority    string  `faker:"oneof: 0, 1, 10, 100, 1000"`
+	RequestCreationTime    string  `faker:"custom_alb_time"`
+	ActionsExecuted        string  `faker:"oneof: -"`
+	RedirectURL            string  `faker:"oneof: -"`
+	ErrorReason            string  `faker:"oneof: -"`
+	PortList               int     `faker:"oneof: 8080"`
+	TargetStatusCodeList   int     `faker:"oneof: 200, 201, 204, 400, 500"`
+	Classification         string  `faker:"oneof: -"`
+	ClassificationReason   string  `faker:"oneof: -"`
+	ConnTraceID            string  `faker:"oneof: TID_1234abcd5678ef90"`
+}
+
+func (f FakeALBLogFields) String() string {
+	return fmt.Sprintf(
+		"%s %s %s %s:%d %s:%s %.3f %.3f %.3f %d %d %d %d \"%s\" \"%s\" %s %s %s \"%s\" \"%s\" \"%s\" %s %s \"%s\" \"%s\" \"%s\" \"%s:%d\" \"%d\" \"%s\" \"%s\" %s",
+		f.Type,
+		f.Time,
+		f.ELB,
+		f.ClientIP,
+		f.ClientPort,
+		f.TargetIP,
+		f.TargetPort,
+		f.RequestProcessingTime,
+		f.TargetProcessingTime,
+		f.ResponseProcessingTime,
+		f.ELBStatusCode,
+		f.TargetStatusCode,
+		f.ReceivedBytes,
+		f.SentBytes,
+		f.Request,
+		f.UserAgent,
+		f.SSLCipher,
+		f.SSLProtocol,
+		f.TargetGroupARN,
+		f.TraceID,
+		f.DomainName,
+		f.ChosenCertARN,
+		f.MatchedRulePriority,
+		f.RequestCreationTime,
+		f.ActionsExecuted,
+		f.RedirectURL,
+		f.ErrorReason,
+		f.TargetIP,
+		f.PortList,
+		f.TargetStatusCodeList,
+		f.Classification,
+		f.ClassificationReason,
+		f.ConnTraceID,
 	)
 }
 
@@ -122,7 +124,7 @@ func main() {
 			return
 		}
 
-		fmt.Print(buildALBLogLine(logEntry))
+		fmt.Print(logEntry.String())
 		if i < flagCount-1 {
 			fmt.Print("\n")
 		}

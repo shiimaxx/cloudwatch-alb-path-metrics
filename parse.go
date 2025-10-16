@@ -65,6 +65,8 @@ func parseALBLogFields(fields []string) (*albLogEntry, error) {
 		return nil, errors.New("failed to parse response processing time: " + err.Error())
 	}
 
+	// Floating-point arithmetic may introduce rounding errors, but even for the second-based durations
+	// emitted by ALB logs the error (~1e-13 s) is negligible relative to their millisecond precision.
 	duration := requestProcessingTime + targetProcessingTime + responseProcessingTime
 
 	requestParts := strings.Fields(fields[requestFieldIndex])

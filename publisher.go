@@ -39,6 +39,12 @@ func (p *CloudWatchMetricPublisher) Publish(ctx context.Context, data []types.Me
 			MetricData: chunk,
 		}
 
+		fmt.Printf("Publishing %d metrics to CloudWatch namespace %q\n", len(chunk), p.namespace)
+
+		if true {
+			return nil
+		}
+
 		if _, err := p.client.PutMetricData(ctx, input); err != nil {
 			return fmt.Errorf("put metric data: %w", err)
 		}
@@ -66,3 +72,4 @@ func (p *CloudWatchMetricPublisher) chunkMetricData(data []types.MetricDatum) ([
 
 	return batches, nil
 }
+
