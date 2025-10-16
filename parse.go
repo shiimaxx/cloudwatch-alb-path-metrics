@@ -71,6 +71,11 @@ func parseALBLogFields(fields []string) (*albLogEntry, error) {
 		return nil, errors.New("failed to parse response processing time: " + err.Error())
 	}
 
+	// Ensure processing times are non-negative. Negative values indicate a timeout.
+	requestProcessingTime = math.Max(requestProcessingTime, 0)
+	targetProcessingTime = math.Max(targetProcessingTime, 0)
+	responseProcessingTime = math.Max(responseProcessingTime, 0)
+
 	// Small rounding errors inflate the cardinality of CloudWatch metric values, so normalize to ALB precision.
 	duration := roundALBDurationSeconds(requestProcessingTime + targetProcessingTime + responseProcessingTime)
 
