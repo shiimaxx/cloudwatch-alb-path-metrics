@@ -2,10 +2,9 @@ FROM golang:1.25 as builder
 
 WORKDIR /src
 
-COPY go.mod go.sum ./
-RUN go mod download
+COPY cmd/cloudwatch-alb-path-metrics/* ./
 
-COPY *.go ./
+RUN go mod download
 
 RUN CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -o bootstrap .
 
