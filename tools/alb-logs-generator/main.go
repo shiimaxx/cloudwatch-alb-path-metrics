@@ -26,7 +26,7 @@ func init() {
 			"GET https://admin.example.com:443/ HTTP/1.1",
 			"GET https://admin.example.com:443/dashboard HTTP/1.1",
 		}
-		return requests[rand.Intn(len(requests)-1)], nil
+		return requests[rand.Intn(len(requests))], nil
 	})
 
 	_ = faker.AddProvider("custom_alb_target_group_arn", func(v reflect.Value) (any, error) {
