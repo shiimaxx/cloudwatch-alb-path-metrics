@@ -16,6 +16,7 @@ type CloudWatchMetricPublisher struct {
 	client       *cloudwatch.Client
 	namespace    string
 	maxBatchSize int
+	dryRun       bool
 }
 
 // Publish sends metric data to CloudWatch in batches that respect PutMetricData limits.
@@ -27,6 +28,13 @@ func (p *CloudWatchMetricPublisher) Publish(ctx context.Context, data []types.Me
 	chunks, err := p.chunkMetricData(data)
 	if err != nil {
 		return fmt.Errorf("prepare metric batches: %w", err)
+	}
+
+	fmt.Printf("Publishing %d metrics in %d batches to CloudWatch namespace %q\n", len(data), len(chunks), p.namespace)
+
+	if p.dryRun {
+		fmt.Println("Dry run enabled, skipping actual publishing")
+		return nil
 	}
 
 	for _, chunk := range chunks {

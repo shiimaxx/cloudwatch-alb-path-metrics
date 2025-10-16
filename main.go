@@ -31,7 +31,9 @@ func handler(ctx context.Context, s3Event events.S3Event) error {
 			client:       cloudwatch.NewFromConfig(cfg),
 			namespace:    "ALBAccessLog",
 			maxBatchSize: defaultMetricBatchSize,
+			dryRun:       os.Getenv("DRY_RUN") == "true",
 		},
+		debug: os.Getenv("DEBUG") == "true",
 	}
 
 	return processor.HandleEvent(ctx, s3Event)

@@ -18,6 +18,7 @@ type MetricsProcessor struct {
 	rules      *PathRules
 	aggregator *MetricAggregator
 	publisher  *CloudWatchMetricPublisher
+	debug      bool
 }
 
 func (p *MetricsProcessor) HandleEvent(ctx context.Context, s3Event events.S3Event) error {
@@ -46,7 +47,9 @@ func (p *MetricsProcessor) HandleEvent(ctx context.Context, s3Event events.S3Eve
 		return fmt.Errorf("publish metrics: %w", err)
 	}
 
-	p.logMetrics(metricData)
+	if p.debug {
+		p.logMetrics(metricData)
+	}
 
 	return nil
 }
