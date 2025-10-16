@@ -11,12 +11,12 @@ import (
 )
 
 type albLogEntry struct {
-	timestamp time.Time
-	method    string
-	host      string
-	path      string
-	status    int
-	duration  float64
+	timestamp            time.Time
+	method               string
+	host                 string
+	path                 string
+	status               int
+	targetProcessingTime float64
 }
 
 // AWS ALB log field constants (0-based indices)
@@ -27,12 +27,10 @@ type albLogEntry struct {
 // "actions_executed" "redirect_url" "error_reason" "target:port_list" "target_status_code_list"
 // "classification" "classification_reason" conn_trace_id "transformed_host" "transformed_uri" "request_transform_status"
 const (
-	timestampFieldIndex              = 1
-	requestProcessingTimeFieldIndex  = 5
-	targetProcessingTimeFieldIndex   = 6
-	responseProcessingTimeFieldIndex = 7
-	statusFieldIndex                 = 8
-	requestFieldIndex                = 12
+	timestampFieldIndex            = 1
+	targetProcessingTimeFieldIndex = 6
+	statusFieldIndex               = 8
+	requestFieldIndex              = 12
 )
 
 func roundALBDurationSeconds(v float64) float64 {
@@ -56,28 +54,10 @@ func parseALBLogFields(fields []string) (*albLogEntry, error) {
 		return nil, errors.New("failed to parse status: " + err.Error())
 	}
 
-	requestProcessingTime, err := strconv.ParseFloat(fields[requestProcessingTimeFieldIndex], 64)
-	if err != nil {
-		return nil, errors.New("failed to parse request processing time: " + err.Error())
-	}
-
 	targetProcessingTime, err := strconv.ParseFloat(fields[targetProcessingTimeFieldIndex], 64)
 	if err != nil {
 		return nil, errors.New("failed to parse target processing time: " + err.Error())
 	}
-
-	responseProcessingTime, err := strconv.ParseFloat(fields[responseProcessingTimeFieldIndex], 64)
-	if err != nil {
-		return nil, errors.New("failed to parse response processing time: " + err.Error())
-	}
-
-	// Ensure processing times are non-negative. Negative values indicate a timeout.
-	requestProcessingTime = math.Max(requestProcessingTime, 0)
-	targetProcessingTime = math.Max(targetProcessingTime, 0)
-	responseProcessingTime = math.Max(responseProcessingTime, 0)
-
-	// Small rounding errors inflate the cardinality of CloudWatch metric values, so normalize to ALB precision.
-	duration := roundALBDurationSeconds(requestProcessingTime + targetProcessingTime + responseProcessingTime)
 
 	requestParts := strings.Fields(fields[requestFieldIndex])
 	if len(requestParts) < 3 {
@@ -93,12 +73,12 @@ func parseALBLogFields(fields []string) (*albLogEntry, error) {
 	}
 
 	return &albLogEntry{
-		timestamp: timestamp,
-		method:    method,
-		host:      u.Hostname(),
-		path:      u.Path,
-		status:    status,
-		duration:  duration,
+		timestamp:            timestamp,
+		method:               method,
+		host:                 u.Hostname(),
+		path:                 u.Path,
+		status:               status,
+		targetProcessingTime: targetProcessingTime,
 	}, nil
 }
 

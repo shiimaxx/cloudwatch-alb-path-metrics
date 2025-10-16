@@ -94,7 +94,7 @@ func (p *MetricsProcessor) logMetrics(metricData []types.MetricDatum) {
 
 	for _, data := range metricData {
 		switch aws.ToString(data.MetricName) {
-		case metricNameResponseTime:
+		case metricNameTargetResponseTime:
 			fmt.Printf("Metric: %s, Dimensions: %v, Timestamp: %v, Values: %v, Counts: %v\n",
 				aws.ToString(data.MetricName),
 				expandDimensions(data.Dimensions),

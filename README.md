@@ -51,7 +51,7 @@ Log entries that do not match any rule are ignored to prevent Route dimension ca
 
 | Name | Unit | Value |
 |------|------|-------|
-| `ResponseTime` | Seconds | Total ALB latency (`request_processing_time + target_processing_time + response_processing_time`) per request |
+| `TargetResponseTime` | Seconds | `target_processing_time` field in the ALB access log |
 | `RequestCount` | Count | Always 1 for each processed request |
 | `FailedRequestCount` | Count | 1 for requests with 5xx responses, otherwise omitted |
 

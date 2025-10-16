@@ -8,7 +8,7 @@ import (
 )
 
 const (
-	metricNameResponseTime       = "ResponseTime"
+	metricNameTargetResponseTime = "TargetResponseTime"
 	metricNameRequestCount       = "RequestCount"
 	metricNameFailedRequestCount = "FailedRequestCount"
 
@@ -51,7 +51,7 @@ func (m *MetricAggregator) Record(entry albLogEntry, route string) {
 		m.metrics[key] = agg
 	}
 
-	agg.responseTime = append(agg.responseTime, entry.duration)
+	agg.responseTime = append(agg.responseTime, entry.targetProcessingTime)
 	agg.requestCount++
 	if entry.status >= 500 && entry.status <= 599 {
 		agg.failedRequestCount++
@@ -88,7 +88,7 @@ func (m *MetricAggregator) GetCloudWatchMetricData() []types.MetricDatum {
 		for start := 0; start < len(values); start += maxMetricValues {
 			end := min(start+maxMetricValues, len(values))
 			metricData = append(metricData, types.MetricDatum{
-				MetricName: aws.String(metricNameResponseTime),
+				MetricName: aws.String(metricNameTargetResponseTime),
 				Timestamp:  aws.Time(timestamp),
 				Dimensions: dimensions,
 				Values:     values[start:end],
