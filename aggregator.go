@@ -15,6 +15,8 @@ const (
 	metricDimensionMethod = "Method"
 	metricDimensionHost   = "Host"
 	metricDimensionRoute  = "Route"
+
+	maxMetricValues = 150
 )
 
 type metricKey struct {
@@ -83,14 +85,17 @@ func (m *MetricAggregator) GetCloudWatchMetricData() []types.MetricDatum {
 			counts = append(counts, 1.0)
 		}
 
-		metricData = append(metricData, types.MetricDatum{
-			MetricName: aws.String(metricNameResponseTime),
-			Timestamp:  aws.Time(timestamp),
-			Dimensions: dimensions,
-			Values:     values,
-			Counts:     counts,
-			Unit:       types.StandardUnitSeconds,
-		})
+		for start := 0; start < len(values); start += maxMetricValues {
+			end := min(start + maxMetricValues, len(values))
+			metricData = append(metricData, types.MetricDatum{
+				MetricName: aws.String(metricNameResponseTime),
+				Timestamp:  aws.Time(timestamp),
+				Dimensions: dimensions,
+				Values:     values[start:end],
+				Counts:     counts[start:end],
+				Unit:       types.StandardUnitSeconds,
+			})
+		}
 
 		metricData = append(metricData, types.MetricDatum{
 			MetricName: aws.String(metricNameRequestCount),
