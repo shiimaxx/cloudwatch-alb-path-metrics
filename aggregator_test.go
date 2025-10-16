@@ -4,6 +4,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/aws/aws-sdk-go-v2/service/cloudwatch/types"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -100,4 +101,38 @@ func TestMetricAggregator_GetCloudWatchMetricData_EmptyMetrics(t *testing.T) {
 	aggregator := &MetricAggregator{metrics: make(map[metricKey]*metricAggregate)}
 	metricData := aggregator.GetCloudWatchMetricData()
 	assert.Empty(t, metricData)
+}
+
+func TestMetricAggregator_GetCloudWatchMetricData_GroupsDuplicateResponseTimes(t *testing.T) {
+	aggregator := &MetricAggregator{metrics: make(map[metricKey]*metricAggregate)}
+
+	route := "/dup"
+	time1 := parseTime(t, "2024-03-01T09:00:05Z")
+	time2 := parseTime(t, "2024-03-01T09:00:35Z")
+	time3 := parseTime(t, "2024-03-01T09:00:55Z")
+	time4 := parseTime(t, "2024-03-01T09:00:59Z")
+
+	aggregator.Record(albLogEntry{method: "POST", host: "api.example.com", status: 200, duration: 0.42, timestamp: time1}, route)
+	aggregator.Record(albLogEntry{method: "POST", host: "api.example.com", status: 200, duration: 0.42, timestamp: time2}, route)
+	aggregator.Record(albLogEntry{method: "POST", host: "api.example.com", status: 200, duration: 0.58, timestamp: time3}, route)
+	aggregator.Record(albLogEntry{method: "POST", host: "api.example.com", status: 500, duration: 0.42, timestamp: time4}, route)
+
+	metricData := aggregator.GetCloudWatchMetricData()
+
+	var responseDatum *types.MetricDatum
+	for i := range metricData {
+		md := &metricData[i]
+		if md.MetricName == nil || *md.MetricName != metricNameResponseTime {
+			continue
+		}
+		responseDatum = md
+		break
+	}
+
+	if responseDatum == nil {
+		t.Fatalf("response time metric datum not found")
+	}
+
+	assert.Equal(t, []float64{0.42, 0.58}, responseDatum.Values)
+	assert.Equal(t, []float64{3, 1}, responseDatum.Counts)
 }
