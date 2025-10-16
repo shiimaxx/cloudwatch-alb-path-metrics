@@ -86,7 +86,7 @@ func (m *MetricAggregator) GetCloudWatchMetricData() []types.MetricDatum {
 		}
 
 		for start := 0; start < len(values); start += maxMetricValues {
-			end := min(start + maxMetricValues, len(values))
+			end := min(start+maxMetricValues, len(values))
 			metricData = append(metricData, types.MetricDatum{
 				MetricName: aws.String(metricNameResponseTime),
 				Timestamp:  aws.Time(timestamp),

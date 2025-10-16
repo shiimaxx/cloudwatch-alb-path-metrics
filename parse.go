@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/csv"
 	"errors"
+	"math"
 	"net/url"
 	"strconv"
 	"strings"
@@ -24,7 +25,7 @@ type albLogEntry struct {
 // elb_status_code target_status_code received_bytes sent_bytes "request" "user_agent" ssl_cipher ssl_protocol
 // target_group_arn "trace_id" "domain_name" "chosen_cert_arn" matched_rule_priority request_creation_time
 // "actions_executed" "redirect_url" "error_reason" "target:port_list" "target_status_code_list"
-// "classification" "classification_reason" conn_trace_id
+// "classification" "classification_reason" conn_trace_id "transformed_host" "transformed_uri" "request_transform_status"
 const (
 	timestampFieldIndex              = 1
 	requestProcessingTimeFieldIndex  = 5
@@ -33,6 +34,11 @@ const (
 	statusFieldIndex                 = 8
 	requestFieldIndex                = 12
 )
+
+func roundALBDurationSeconds(v float64) float64 {
+	const millisecondPrecision = 1e3 // ALB durations are emitted with millisecond precision.
+	return math.Round(v*millisecondPrecision) / millisecondPrecision
+}
 
 func parseALBLogFields(fields []string) (*albLogEntry, error) {
 	if len(fields) <= requestFieldIndex {
@@ -65,9 +71,8 @@ func parseALBLogFields(fields []string) (*albLogEntry, error) {
 		return nil, errors.New("failed to parse response processing time: " + err.Error())
 	}
 
-	// Floating-point arithmetic may introduce rounding errors, but even for the second-based durations
-	// emitted by ALB logs the error (~1e-13 s) is negligible relative to their millisecond precision.
-	duration := requestProcessingTime + targetProcessingTime + responseProcessingTime
+	// Small rounding errors inflate the cardinality of CloudWatch metric values, so normalize to ALB precision.
+	duration := roundALBDurationSeconds(requestProcessingTime + targetProcessingTime + responseProcessingTime)
 
 	requestParts := strings.Fields(fields[requestFieldIndex])
 	if len(requestParts) < 3 {

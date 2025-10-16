@@ -66,4 +66,3 @@ func (p *CloudWatchMetricPublisher) chunkMetricData(data []types.MetricDatum) ([
 
 	return batches, nil
 }
-
