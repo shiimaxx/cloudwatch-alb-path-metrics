@@ -59,7 +59,7 @@ func (p *Processor) HandleEvent(ctx context.Context, s3Event events.S3Event) err
 		return nil
 	}
 
-	if err := p.publisher.Publish(ctx, metricData); err != nil {
+	if err := p.publisher.publish(ctx, metricData); err != nil {
 		return fmt.Errorf("publish metrics: %w", err)
 	}
 
