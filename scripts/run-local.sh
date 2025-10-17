@@ -9,8 +9,8 @@ container run \
   -e AWS_SECRET_ACCESS_KEY=$(echo "$credentials" | jq -r '.SecretAccessKey') \
   -e AWS_SESSION_TOKEN=$(echo "$credentials" | jq -r '.SessionToken') \
   -e INCLUDE_PATH_RULES \
-	-e DRY_RUN \
-	-e DEBUG \
+  -e DRY_RUN \
+  -e DEBUG \
   -p 9000:8080 \
   cloudwatch-alb-path-metrics
 

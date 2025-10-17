@@ -24,5 +24,5 @@ aws lambda update-function-configuration \
   --environment Variables="
 {
   INCLUDE_PATH_RULES=\"${INCLUDE_PATH_RULES}\",
-	DRY_RUN=\"${DRY_RUN}\"
+  DRY_RUN=\"${DRY_RUN}\"
 }"
