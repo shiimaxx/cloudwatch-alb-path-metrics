@@ -14,7 +14,7 @@ const (
 
 	metricDimensionMethod = "Method"
 	metricDimensionHost   = "Host"
-	metricDimensionRoute  = "Route"
+	metricDimensionPath   = "Path"
 
 	maxMetricValues = 150
 )
@@ -22,7 +22,7 @@ const (
 type metricKey struct {
 	Method string
 	Host   string
-	Route  string
+	Path   string
 	Minute time.Time
 }
 
@@ -32,19 +32,19 @@ type metricAggregate struct {
 	failedRequestCount int
 }
 
-// metricAggregator maintains per method/host/route aggregates convertible to CloudWatch MetricDatum values.
+// metricAggregator maintains per method/host/path aggregates convertible to CloudWatch MetricDatum values.
 type metricAggregator struct {
 	metrics map[metricKey]*metricAggregate
 }
 
-// Record adds a single request observation to the aggregate identified by the normalized route.
-func (m *metricAggregator) Record(entry albLogEntry, route string) {
-	if route == "" {
+// Record adds a single request observation to the aggregate identified by the rule name.
+func (m *metricAggregator) Record(entry albLogEntry, name string) {
+	if name == "" {
 		return
 	}
 
 	minute := entry.timestamp.UTC().Truncate(time.Minute)
-	key := metricKey{Method: entry.method, Host: entry.host, Route: route, Minute: minute}
+	key := metricKey{Method: entry.method, Host: entry.host, Path: name, Minute: minute}
 	agg, ok := m.metrics[key]
 	if !ok {
 		agg = &metricAggregate{}
@@ -68,7 +68,7 @@ func (m *metricAggregator) GetCloudWatchMetricData() []types.MetricDatum {
 		dimensions := []types.Dimension{
 			{Name: aws.String(metricDimensionMethod), Value: aws.String(key.Method)},
 			{Name: aws.String(metricDimensionHost), Value: aws.String(key.Host)},
-			{Name: aws.String(metricDimensionRoute), Value: aws.String(key.Route)},
+			{Name: aws.String(metricDimensionPath), Value: aws.String(key.Path)},
 		}
 
 		valueIndex := make(map[float64]int, len(agg.responseTime))
@@ -116,3 +116,9 @@ func (m *metricAggregator) GetCloudWatchMetricData() []types.MetricDatum {
 
 	return metricData
 }
+
+// MetricAggregator exposes the internal aggregator type for tests.
+type MetricAggregator = metricAggregator
+
+// metricNameResponseTime retains compatibility with existing tests that reference the older constant name.
+const metricNameResponseTime = metricNameTargetResponseTime

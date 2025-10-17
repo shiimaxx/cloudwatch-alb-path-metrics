@@ -28,7 +28,7 @@ func NewProcwessor(s3Client *s3.Client, cwClient *cloudwatch.Client, rules *path
 		rules:      rules,
 		aggregator: &metricAggregator{metrics: make(map[metricKey]*metricAggregate)},
 		publisher: &cloudWatchMetricPublisher{
-			client:       cwClient, 
+			client:       cwClient,
 			namespace:    "ALBAccessLog",
 			maxBatchSize: defaultMetricBatchSize,
 			dryRun:       dryRun,
@@ -86,11 +86,11 @@ func (p *Processor) streamObjectLines(ctx context.Context, bucket, key string) e
 	scanner := bufio.NewScanner(gzipReader)
 	for scanner.Scan() {
 		line := scanner.Text()
-		entry, route, matched := p.normalizeLogLine(line)
+		entry, name, matched := p.normalizeLogLine(line)
 		if !matched {
 			continue
 		}
-		p.aggregator.Record(*entry, route)
+		p.aggregator.Record(*entry, name)
 	}
 
 	if err := scanner.Err(); err != nil {
@@ -129,7 +129,7 @@ func (p *Processor) logMetrics(metricData []types.MetricDatum) {
 	}
 }
 
-// normalizeLogLine returns the parsed entry and normalized route when the log line matches a rule.
+// normalizeLogLine returns the parsed entry and rule name when the log line matches a rule.
 func (p *Processor) normalizeLogLine(line string) (*albLogEntry, string, bool) {
 	if p.rules == nil || !p.rules.enabled {
 		return nil, "", false
@@ -140,10 +140,13 @@ func (p *Processor) normalizeLogLine(line string) (*albLogEntry, string, bool) {
 		return nil, "", false
 	}
 
-	route, matched := p.rules.normalize(*entry)
+	name, matched := p.rules.normalize(*entry)
 	if !matched {
 		return nil, "", false
 	}
 
-	return entry, route, true
+	return entry, name, true
 }
+
+// MetricsProcessor exposes the processor type for tests.
+type MetricsProcessor = Processor

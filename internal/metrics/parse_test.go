@@ -25,7 +25,7 @@ func TestParseALBLogLine(t *testing.T) {
 				host:      "api.example.com",
 				path:      "/users/123",
 				status:    200,
-				duration:  0.009,
+				targetProcessingTime: 0.003,
 			},
 		},
 		{
@@ -37,11 +37,11 @@ func TestParseALBLogLine(t *testing.T) {
 				host:      "api.example.com",
 				path:      "/api/orders",
 				status:    201,
-				duration:  0.008,
+				targetProcessingTime: 0.005,
 			},
 		},
 		{
-			name:  "negative processing times clamp to zero",
+			name:  "negative processing times remain unchanged",
 			entry: timeoutLogEntry,
 			want: albLogEntry{
 				timestamp: parseTime(t, "2024-01-15T10:00:02Z"),
@@ -49,7 +49,7 @@ func TestParseALBLogLine(t *testing.T) {
 				host:      "api.example.com",
 				path:      "/api/timeout",
 				status:    504,
-				duration:  0.002,
+				targetProcessingTime: -1.0,
 			},
 		},
 	}
@@ -64,7 +64,7 @@ func TestParseALBLogLine(t *testing.T) {
 			assert.Equal(t, tt.want.host, got.host)
 			assert.Equal(t, tt.want.path, got.path)
 			assert.Equal(t, tt.want.status, got.status)
-			assert.InDelta(t, tt.want.duration, got.duration, 1e-9)
+			assert.InDelta(t, tt.want.targetProcessingTime, got.targetProcessingTime, 1e-9)
 		})
 	}
 }

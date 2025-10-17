@@ -7,12 +7,12 @@ import (
 	"strings"
 )
 
-// pathRuleConfig represents the JSON shape used to configure route normalization rules.
+// pathRuleConfig represents the JSON shape used to configure path normalization rules.
 type pathRuleConfig struct {
-	Host   string `json:"host"`
-	Path   string `json:"path"`
-	Route  string `json:"route"`
-	Method string `json:"method,omitempty"`
+	Host    string `json:"host"`
+	Pattern string `json:"pattern"`
+	Name    string `json:"name"`
+	Method  string `json:"method,omitempty"`
 }
 
 // pathRules holds the compiled rule set for host-aware path normalization.
@@ -25,7 +25,7 @@ type pathRules struct {
 type compiledRule struct {
 	host   string
 	method string
-	route  string
+	name   string
 	regex  *regexp.Regexp
 }
 
@@ -52,25 +52,25 @@ func NewPathRules(raw string) (*pathRules, error) {
 			return nil, fmt.Errorf("path rule %d: host is required", idx)
 		}
 
-		if cfg.Path == "" {
-			return nil, fmt.Errorf("path rule %d: path regex is required", idx)
+		if cfg.Pattern == "" {
+			return nil, fmt.Errorf("path rule %d: pattern is required", idx)
 		}
 
-		if cfg.Route == "" {
-			return nil, fmt.Errorf("path rule %d: route is required", idx)
+		if cfg.Name == "" {
+			return nil, fmt.Errorf("path rule %d: name is required", idx)
 		}
 
 		method := strings.ToUpper(cfg.Method)
 
-		regex, err := regexp.Compile(cfg.Path)
+		regex, err := regexp.Compile(cfg.Pattern)
 		if err != nil {
-			return nil, fmt.Errorf("path rule %d: failed to compile regex: %w", idx, err)
+			return nil, fmt.Errorf("path rule %d: failed to compile pattern regex: %w", idx, err)
 		}
 
 		compiled = append(compiled, compiledRule{
 			host:   cfg.Host,
 			method: method,
-			route:  cfg.Route,
+			name:   cfg.Name,
 			regex:  regex,
 		})
 	}
@@ -81,7 +81,7 @@ func NewPathRules(raw string) (*pathRules, error) {
 	}, nil
 }
 
-// normalize returns the normalized route for the provided entry if any rule matches.
+// normalize returns the configured name for the provided entry if any rule matches.
 func (pr *pathRules) normalize(entry albLogEntry) (string, bool) {
 	if pr == nil || !pr.enabled {
 		return "", false
@@ -97,9 +97,15 @@ func (pr *pathRules) normalize(entry albLogEntry) (string, bool) {
 		}
 
 		if rule.regex.MatchString(entry.path) {
-			return rule.route, true
+			return rule.name, true
 		}
 	}
 
 	return "", false
 }
+
+// PathRuleConfig exposes the internal rule configuration structure for tests.
+type PathRuleConfig = pathRuleConfig
+
+// PathRules exposes the compiled rule type for tests.
+type PathRules = pathRules
