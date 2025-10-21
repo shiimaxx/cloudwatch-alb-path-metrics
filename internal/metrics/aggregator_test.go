@@ -27,14 +27,14 @@ func TestMetricAggregator_RecordAggregatesMetrics(t *testing.T) {
 	assert.True(t, ok)
 	assert.Equal(t, 2, minute1Agg.requestCount)
 	assert.Equal(t, 1, minute1Agg.failedRequestCount)
-	assert.Equal(t, []float64{0.12, 0.34}, minute1Agg.responseTime)
+	assert.Equal(t, []float64{0.12, 0.34}, minute1Agg.targetResponseTime)
 
 	minute2Key := metricKey{Method: "GET", Host: "example.com", Path: name, Minute: time3.Truncate(time.Minute)}
 	minute2Agg, ok := aggregator.metrics[minute2Key]
 	assert.True(t, ok)
 	assert.Equal(t, 1, minute2Agg.requestCount)
 	assert.Equal(t, 0, minute2Agg.failedRequestCount)
-	assert.Equal(t, []float64{0.56}, minute2Agg.responseTime)
+	assert.Equal(t, []float64{0.56}, minute2Agg.targetResponseTime)
 }
 
 func TestMetricAggregator_GetCloudWatchMetricData(t *testing.T) {

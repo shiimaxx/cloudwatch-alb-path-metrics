@@ -3,7 +3,6 @@ package metrics
 import (
 	"encoding/csv"
 	"errors"
-	"math"
 	"net/url"
 	"strconv"
 	"strings"
@@ -32,11 +31,6 @@ const (
 	statusFieldIndex               = 8
 	requestFieldIndex              = 12
 )
-
-func roundALBDurationSeconds(v float64) float64 {
-	const millisecondPrecision = 1e3 // ALB durations are emitted with millisecond precision.
-	return math.Round(v*millisecondPrecision) / millisecondPrecision
-}
 
 func parseALBLogFields(fields []string) (*albLogEntry, error) {
 	if len(fields) <= requestFieldIndex {

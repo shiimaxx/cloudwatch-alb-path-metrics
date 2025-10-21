@@ -27,7 +27,7 @@ type metricKey struct {
 }
 
 type metricAggregate struct {
-	responseTime       []float64
+	targetResponseTime []float64
 	requestCount       int
 	failedRequestCount int
 }
@@ -51,7 +51,11 @@ func (m *metricAggregator) Record(entry albLogEntry, name string) {
 		m.metrics[key] = agg
 	}
 
-	agg.responseTime = append(agg.responseTime, entry.targetProcessingTime)
+	// Ignore negative target processing times, which indicate no target was involved.
+	if entry.targetProcessingTime >= 0 {
+		agg.targetResponseTime = append(agg.targetResponseTime, entry.targetProcessingTime)
+	}
+
 	agg.requestCount++
 	if entry.status >= 500 && entry.status <= 599 {
 		agg.failedRequestCount++
@@ -71,10 +75,10 @@ func (m *metricAggregator) GetCloudWatchMetricData() []types.MetricDatum {
 			{Name: aws.String(metricDimensionPath), Value: aws.String(key.Path)},
 		}
 
-		valueIndex := make(map[float64]int, len(agg.responseTime))
+		valueIndex := make(map[float64]int, len(agg.targetResponseTime))
 		var values []float64
 		var counts []float64
-		for _, v := range agg.responseTime {
+		for _, v := range agg.targetResponseTime {
 			if idx, ok := valueIndex[v]; ok {
 				counts[idx]++
 				continue
