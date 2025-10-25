@@ -8,23 +8,44 @@ This project provides a Lambda function that analyzes Application Load Balancer 
 
 ## Motivation
 
-ALB-level metrics serve as an effective starting point for SLI/SLO implementations. However, when a single ALB fronts every request, those metrics remain coarse aggregates that mask per-feature or per-service behavior. Teams still need a way to observe how individual endpoints perform.
+When implementing SLI/SLO practices, it is reasonable to leverage the monitoring services provided by the cloud platform.
+In typical AWS workloads, metrics from the Application Load Balancer (ALB) can be used to measure request availability and latency.
 
-AWS-native tooling does not surface path-level metrics out of the box; you must parse access logs and normalize URLs yourself to keep metric cardinality under control. This project automates that workflow with a Lambda function that turns ALB logs into curated CloudWatch metrics for each endpoint while staying entirely within managed AWS services.
+However, ALB’s built-in metrics are only available at the load balancer or target group level.
+While these are useful for understanding overall service trends, they do not provide visibility at the request-path level, which is often more relevant to user experience.
+If path-based metrics were available, teams could define SLIs aligned with Critical User Journeys (CUJs) and operate SLOs more effectively.
+
+cloudwatch-alb-path-metrics is a simple solution designed for this purpose.
+It parses ALB access logs, normalizes request paths, and publishes custom CloudWatch metrics for each path—enabling path-level SLI/SLO measurement entirely within AWS, without introducing additional middleware or external observability systems.
+
+## Installation
+
+```
+make
+
+aws lambda create-function \
+  --function-name cloudwatch-alb-path-metrics \
+  --runtime provided.al2023 \
+  --handler bootstrap \
+  --architectures arm64 \
+  --zip-file fileb://dist/cloudwatch-alb-path-metrics.zip \
+  --role arn:aws:iam::<aws-account-id>:role/CloudWatchALBPathMetrics \
+  --environment Variables="
+{
+  INCLUDE_PATH_RULES='[{"host":"example.com","method":"GET","pattern":"^/users/[0-9]+$","name":"/users/:id"}]'
+}"
+```
 
 ## Configuration
 
-### Environment Variables
+### INCLUDE_PATH_RULES
 
-| Variable | Description | Required | Example |
-|----------|-------------|----------|---------|
-| `INCLUDE_PATH_RULES` | JSON array describing host-aware path normalization rules | No | `[{"host":"example.com","pattern":"^/users/[0-9]+$","name":"/users/:id"}]` |
+INCLUDE_PATH_RULES defines which request paths should be published as metrics.
+It accepts a JSON array describing host and path-matching rules.
 
-The function publishes metrics under the CloudWatch namespace `cloudwatch-alb-path-metrics`.
-
-### Path Rules
-
-Define path rules to group high-cardinality URLs into stable patterns before publishing metrics. Provide a JSON array via `INCLUDE_PATH_RULES`, ordered from the most specific rule to the most general. Each rule object supports the following keys:
+Publishing metrics for every unique path in ALB access logs can easily lead to a high-cardinality explosion in the Path dimension,
+which increases CloudWatch costs and reduces the usefulness of aggregated metrics.
+To avoid this, the tool is designed to emit metrics only for a small set of important endpoints that represent your SLI targets.
 
 - `host` (required): Exact host name comparison performed against the log entry.
 - `pattern` (required): Regular expression applied to the request path.
@@ -42,7 +63,7 @@ Define path rules to group high-cardinality URLs into stable patterns before pub
 This configuration performs the following transformations when both host and path match:
 
 - `https://example.com/users/42` → `/users/:id`
-- `https://example.com/articles/next-gen-observability/comments` → `/article/:slug/comments`
+- `https://example.com/articles/hello-world/comments` → `/article/:slug/comments`
 - `https://admin.example.com/dashboard/settings` → `/dashboard/*`
 
 Log entries that do not match any rule are ignored to prevent Path dimension cardinality from exploding.
