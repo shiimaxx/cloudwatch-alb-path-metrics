@@ -74,7 +74,7 @@ aws iam create-policy \
 
 aws iam create-role \
   --role-name CloudWatchALBPathMetrics \
-  --max-session-duration 3600
+  --max-session-duration 3600 \
   --assume-role-policy-document \
 '{
   "Version": "2012-10-17",
