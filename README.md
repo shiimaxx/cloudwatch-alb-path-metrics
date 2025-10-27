@@ -1,15 +1,11 @@
 # cloudwatch-alb-path-metrics
 
-A Lambda function that aggregates ALB logs and publishes path-based CloudWatch custom metrics
-
-## Overview
-
-This project provides a Lambda function that analyzes Application Load Balancer (ALB) access logs and publishes path-based HTTP request performance metrics as Amazon CloudWatch custom metrics. The key feature is collecting metrics organized by request paths, enabling detailed monitoring of individual API endpoints or URL patterns.
+cloudwatch-alb-path-metrics is a Lambda function that generates path-based metrics from Application Load Balancer (ALB) access logs and publishes them as Amazon CloudWatch custom metrics.
 
 ## Motivation
 
 When implementing SLI/SLO practices, it is reasonable to leverage the monitoring services provided by the cloud platform.
-In typical AWS workloads, metrics from the Application Load Balancer (ALB) can be used to measure request availability and latency.
+In typical AWS workloads, metrics from the ALB can be used to measure request availability and latency.
 
 However, ALB’s built-in metrics are only available at the load balancer or target group level.
 While these are useful for understanding overall service trends, they do not provide visibility at the request-path level, which is often more relevant to user experience.
@@ -21,6 +17,90 @@ It parses ALB access logs, normalizes request paths, and publishes custom CloudW
 ## Installation
 
 ```
+aws iam create-policy \
+  --policy-name cloudwatch-alb-path-metrics-alb-logs-bucket-access \
+  --policy-document \
+'{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "AllowReadAlbLogs",
+      "Effect": "Allow",
+      "Action": [
+        "s3:GetObject",
+        "s3:GetObjectAttributes"
+      ],
+      "Resource": "arn:aws:s3:::<alb logs bucket name>/*"
+    },
+    {
+      "Sid": "AllowListAlbLogBucket",
+      "Effect": "Allow",
+      "Action": "s3:ListBucket",
+      "Resource": "arn:aws:s3:::<alb logs bucket name>"
+    }
+  ]
+}'
+
+
+aws iam create-policy \
+  --policy-name cloudwatch-alb-path-metrics-publish \
+  --policy-document \
+'{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "AllowPutMetrics",
+      "Effect": "Allow",
+      "Action": "cloudwatch:PutMetricData",
+      "Resource": "*",
+      "Condition": {
+        "StringEquals": {
+          "cloudwatch:Namespace": "ALBAccessLog"
+        }
+      }
+    },
+    {
+      "Sid": "AllowLambdaLogs",
+      "Effect": "Allow",
+      "Action": [
+        "logs:CreateLogGroup",
+        "logs:CreateLogStream",
+        "logs:PutLogEvents"
+      ],
+      "Resource": "*"
+    }
+  ]
+}'
+
+aws iam create-role \
+  --role-name CloudWatchALBPathMetrics \
+  --max-session-duration 3600
+  --assume-role-policy-document \
+'{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Principal": {
+        "Service": "lambda.amazonaws.com"
+      },
+      "Action": "sts:AssumeRole"
+    }
+  ]
+}'
+
+aws iam attach-role-policy \
+  --role-name CloudWatchALBPathMetrics \
+  --policy-arn arn:aws:iam::<account-id>:policy/cloudwatch-alb-path-metrics-alb-logs-bucket-access
+
+aws iam attach-role-policy \
+  --role-name CloudWatchALBPathMetrics \
+  --policy-arn arn:aws:iam::<account-id>:policy/cloudwatch-alb-path-metrics-publish
+
+aws iam attach-role-policy \
+  --role-name CloudWatchALBPathMetrics \
+  --policy-arn arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+
 make
 
 aws lambda create-function \
@@ -29,10 +109,10 @@ aws lambda create-function \
   --handler bootstrap \
   --architectures arm64 \
   --zip-file fileb://dist/cloudwatch-alb-path-metrics.zip \
-  --role arn:aws:iam::<aws-account-id>:role/CloudWatchALBPathMetrics \
-  --environment Variables="
-{
-  INCLUDE_PATH_RULES='[{"host":"example.com","method":"GET","pattern":"^/users/[0-9]+$","name":"/users/:id"}]'
+  --role arn:aws:iam::<account-id>:role/CloudWatchALBPathMetrics \
+  --environment Variables=\
+"{
+  INCLUDE_PATH_RULES='[{\"host\":\"example.com\",\"method":\"GET\",\"pattern\":\"^/users/[0-9]+$\",\"name\":\"/users/:id\"}]'
 }"
 ```
 
