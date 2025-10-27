@@ -16,6 +16,7 @@ It parses ALB access logs, normalizes request paths, and publishes custom CloudW
 
 ## Installation
 
+Create IAM policies and role for the Lambda function:
 ```
 aws iam create-policy \
   --policy-name cloudwatch-alb-path-metrics-alb-logs-bucket-access \
@@ -100,9 +101,15 @@ aws iam attach-role-policy \
 aws iam attach-role-policy \
   --role-name CloudWatchALBPathMetrics \
   --policy-arn arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+```
 
+Build and package the Lambda function:
+```
 make
+```
 
+Deploy the Lambda function:
+```
 aws lambda create-function \
   --function-name cloudwatch-alb-path-metrics \
   --runtime provided.al2023 \
@@ -112,7 +119,7 @@ aws lambda create-function \
   --role arn:aws:iam::<account-id>:role/CloudWatchALBPathMetrics \
   --environment Variables=\
 "{
-  INCLUDE_PATH_RULES='[{\"host\":\"example.com\",\"method":\"GET\",\"pattern\":\"^/users/[0-9]+$\",\"name\":\"/users/:id\"}]'
+  INCLUDE_PATH_RULES='[{\"host\":\"example.com\",\"method\":\"GET\",\"pattern\":\"^/users/[0-9]+\$\",\"name\":\"/users/:id\"}]'
 }"
 ```
 
