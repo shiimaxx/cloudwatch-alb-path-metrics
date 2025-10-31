@@ -1,5 +1,8 @@
 # cloudwatch-alb-path-metrics
 
+> [!NOTE]
+> This project has moved to [topotal/cloudwatch-alb-path-metrics](https://github.com/topotal/cloudwatch-alb-path-metrics). Please refer to the new repository for the latest updates and future maintenance.
+
 cloudwatch-alb-path-metrics is a Lambda function that generates path-based metrics from Application Load Balancer (ALB) access logs and publishes them as Amazon CloudWatch custom metrics.
 
 ## Motivation
